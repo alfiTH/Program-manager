@@ -7,6 +7,8 @@ from PySide6 import QtCore, QtWidgets, QtGui
 import EditUI
 import time
 import threading
+import pandas
+
 
 __author__ = EditUI.__author__
 __copyright__ = EditUI.__copyright__
@@ -18,53 +20,44 @@ __maintainer__ = EditUI.__maintainer__
 __email__ = EditUI.__email__
 __status__ = EditUI.__status__
 
-
+def loadconfig(filename):
+    return pandas.read_csv(filename,delimiter=";")
 
 
 class MyWidget(QtWidgets.QWidget):
-    def __init__(self):
+    def __init__(self, config):
         super().__init__()
         self.table = QtWidgets.QTableWidget(self)
-        columnas=["Disp", "IP", "Ping", "SSH", "Prog", "Config", "Status","Start/Stop", "Terminal", "Clean", "Compile"]
+        columnas = EditUI.RowProgram.titlesColums
         self.table.setColumnCount(len(columnas))
+        self.row = len(config.index)
         #self.setCentralWidget(self.table)
-        data1 = ['hola','hola2','calculator']
-        data2 = ['1.3.4.','2.05.5.5.','3.051','35.6.7.9999']
-        filas=4
-
-        program = [["python3" ,"hola.py"], 
-            ["python3" ,"calculator.py"], 
-            ["./cc.o"]]
 
         #Ajuste de columnas a estrechas
         header = self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode().ResizeToContents) 
-        #Cantidad de columnas
-        self.table.setRowCount(3)
+        #Cantidad de filas
+        self.table.setRowCount(self.row)
         #Tamaño y posicion tabla
-        self.table.setGeometry(QtCore.QRect(50, 0, 950, 36*filas))
+        self.table.setGeometry(QtCore.QRect(50, 0, 950, 36*self.row))
         #Titulos de las columnas
         self.table.setHorizontalHeaderLabels(columnas)
 
-        for index in range(3):
-
-            item1 = QtWidgets.QTableWidgetItem(data1[index])
-            self.table.setItem(index,0,item1)
+        for y in range(self.row):
             
-            item2 = QtWidgets.QTableWidgetItem(data2[index])
-            self.table.setItem(index,1,item2)
-            
-            row = EditUI.RowProgram(ssh="OFF", device="robolab@192.168.1.123", path= "Documentos/Alejandro/Program-manager/tmp",argument=program[index], config="ala")
+            tableRow = EditUI.RowProgram(ssh=config["SSH"].iloc[y], 
+                    device=config["Device"].iloc[y],ping=config["Ping"].iloc[y],path=config["Path"].iloc[y],
+                    program=config["Program"].iloc[y], config=config["Config"].iloc[y])
+            row = tableRow.get_row()
+            for x, cell in enumerate(tableRow.get_row().values()):
+                print("Cell", x, cell)
+                self.table.setCellWidget(y,x,cell)
 
-            item_color = QtWidgets.QTableWidgetItem()
-            item_color.setBackground(QtGui.QColor.fromRgb(0, 255, 0))
-            self.table.setItem(index, 3, item_color)
-
-            btn_sell = row.startStop
-            btn_sell.clicked.connect(self.handleButtonClicked)
-            self.table.setCellWidget(index,2,btn_sell)
+            # btn_sell = row.startStop
+            # btn_sell.clicked.connect(self.handleButtonClicked)
+            # self.table.setCellWidget(index,2,btn_sell)
         
-        child = threading.Thread(target=self.process_widget, daemon=True)
-        child.start()
+        # child = threading.Thread(target=self.process_widget, daemon=True)
+        # child.start()
 
     def process_widget(self):
         while True:
@@ -84,7 +77,9 @@ class MyWidget(QtWidgets.QWidget):
 if __name__ == "__main__":
 
     app = QtWidgets.QApplication([])
-    widget = MyWidget()
+    config = loadconfig("etc/config.csv").astype("string")
+    print(config.to_string())
+    widget = MyWidget(config=config)
     widget.resize(1100, 600)
     widget.show()
     

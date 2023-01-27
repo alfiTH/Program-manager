@@ -21,10 +21,11 @@ __status__ = "Prototype"
 
 
 class RowProgram():
-    def __init__(self, device=None, ssh=False, path=None, argument=[], config=""):
+    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal"]
+    def __init__(self, device=None, ssh="off", ping ="off", path=None, program="", config=""):
 
         #TODO cambiar a diccionario pasar key en fuuncion get y value en la otra
-        self.titlesColums=["Dispositivo", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal"]
+        self.element={}
 
         #Usuario@IP para ssh y visulización
         if not "@" in device:
@@ -34,12 +35,13 @@ class RowProgram():
                 print("No se añadió correctamente el nombre: ", device," Formato Usuario@IP ")
             sys.exit(-1)
         self.device = device
+        self.element[RowProgram.titlesColums[0]] = device
 
-        self.ssh = ["ssh", "-tt"] if ssh.lower()=="true" or ssh.lower()=="-x11" else []
+        self.ssh = ["ssh", "-tt"] if ssh.lower()=="on" or ssh.lower()=="-x11" else []
         if ssh.lower() == "-x11": 
             self.ssh.append("-X11")
 
-
+        self.ping = True if ping.lower()=="on" else False
 
         #Ruta de base del programa
         if path is None:
@@ -49,21 +51,19 @@ class RowProgram():
         print(self.path)
         #TODO cOMPROBAR RUTA CON UN CD
 
-        if len(argument)>0: self.argument = argument 
+        if len(program)>0: self.element[RowProgram.titlesColums[3]]  = program.split(sep=",")
         else:
             print("No se añadio un programa")
             sys.exit(-1)
-        self.config = config
-        self.startStop = EditButton.StartStop(ssh=self.ssh, device=device,path=self.path, argument=self.argument, config=self.config)
-        self.clean = EditButton.Clean(ssh=self.ssh, device=device,path=self.path)
-        self.compile = EditButton.Compile(ssh=self.ssh, device=device,path=self.path)
-        self.terminal = EditButton.Terminal(ssh=self.ssh, device=device,path=self.path)
+        self.element[RowProgram.titlesColums[4]] = config
+        self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
+        self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
+        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.element["SSH"], device=self.element["Device"],path=self.path, program=self.element["Program"], config=self.element["Config"])
+        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
+        
         
     def get_row(self):
-        return None
-
-    def get_titlesColums(self):
-        return self.titlesColums
+        return self.element
         
 
     
@@ -89,10 +89,10 @@ class EditButton():
 
 
     class StartStop(BasicButton):
-        def __init__(self,ssh=False, device=None, path=None, argument=[], config="", parent=None):
+        def __init__(self,ssh=False, device=None, path=None, program=[], config="", parent=None):
             super(EditButton.StartStop, self).__init__(ssh, device, path, parent)
 
-            self.argument = argument 
+            self.program = program 
             self.config = config
             self.run = False
             self.setStyleSheet("background-color: red")
@@ -121,7 +121,7 @@ class EditButton():
                 self.run = False
 
         def launch_program(self):
-            self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.argument + [self.config]
+            self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
                             , stdout=subprocess.PIPE, stdin=subprocess.PIPE , stderr=subprocess.PIPE  )
             self.run = True
             self.setStyleSheet("background-color: green")
@@ -148,13 +148,13 @@ class EditButton():
                 super(EditButton.Terminal, self).__init__(ssh, device, path, parent)
 
             def __del__(self):
-                print('Destructor called, Terminal deleted.')
+                super(EditButton.Terminal, self).__del__()
 
             def function(self):
                 self.launch_program()
             
             def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.argument + [self.config]
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
                                 , stdout=subprocess.PIPE, stdin=subprocess.PIPE , stderr=subprocess.PIPE  )
                 child = Thread(target=self.monitor_program, daemon=True)
                 child.start()
@@ -175,7 +175,7 @@ class EditButton():
                 super(EditButton.Clean, self).__init__(ssh, device, path, parent)
 
             def __del__(self):
-                print('Destructor called, Employee deleted.')
+                super(EditButton.Clean, self).__del__()
                 if not self.process is None: 
                     print ( "pid: ", self.process.poll())
                     self.process.stdout.close()
@@ -187,7 +187,7 @@ class EditButton():
                 self.launch_program()
             
             def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.argument + [self.config]
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
                                 , stdout=subprocess.PIPE, stdin=subprocess.PIPE , stderr=subprocess.PIPE  )
                 child = Thread(target=self.monitor_program, daemon=True)
                 child.start()
@@ -208,7 +208,7 @@ class EditButton():
                 super(EditButton.Compile, self).__init__(ssh, device, path, parent)           
 
             def __del__(self):
-                print('Destructor called, Employee deleted.')
+                super(EditButton.Compile, self).__del__()
                 if not self.process  is None: 
                     print ( "pid: ", self.process.poll())
                     self.process.stdout.close()
@@ -220,7 +220,7 @@ class EditButton():
                 self.launch_program()
             
             def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.argument + [self.config]
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
                                 , stdout=subprocess.PIPE, stdin=subprocess.PIPE , stderr=subprocess.PIPE  )
                 child = Thread(target=self.monitor_program, daemon=True)
                 child.start()

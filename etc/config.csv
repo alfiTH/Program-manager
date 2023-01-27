@@ -1,0 +1,5 @@
+Device;SSH;Ping;Path;Program;Config
+robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;python3,calculator.py; 
+robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;python3,hola.py; 
+robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;./cc.o; 
+robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;./cc.o; 
