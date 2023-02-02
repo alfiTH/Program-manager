@@ -30,41 +30,67 @@ class RowProgram():
         #Usuario@IP para ssh y visulización
         if not "@" in device:
             if device is None:
-                print("No se añadió Nombre de usuario ni IP")
+                print("No se añadió Nombre de usuario ni IP", file=sys.stderr)
             else:
-                print("No se añadió correctamente el nombre: ", device," Formato Usuario@IP ")
+                print("No se añadió correctamente el nombre: ", device," Formato Usuario@IP ", file=sys.stderr)
             sys.exit(-1)
         self.device = device
-        self.element[RowProgram.titlesColums[0]] = device
+        self.element[RowProgram.titlesColums[0]] = QtWidgets.QLabel(text=device)
 
         self.ssh = ["ssh", "-tt"] if ssh.lower()=="on" or ssh.lower()=="-x11" else []
         if ssh.lower() == "-x11": 
             self.ssh.append("-X11")
+        self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
 
         self.ping = True if ping.lower()=="on" else False
+        if self.ping:
+            threadPing = Thread(target=self.fping, daemon=True)
+            threadPing.start()
+        self.element[RowProgram.titlesColums[2]] = QtWidgets.QLabel(text=str(self.ping))
 
         #Ruta de base del programa
         if path is None:
-            print("No se añadió ruta de programa")
+            print("No se añadió ruta de programa", file=sys.stderr)
             sys.exit(-1)
         else : self.path = path if path[0] == '/' else os.path.expanduser('~') + "/" + path[0].replace('~', '') + path[1:]
-        print(self.path)
-        #TODO cOMPROBAR RUTA CON UN CD
+        #TODO dIFERENCIAR SSH
+        if not os.path.exists(self.path):
+            print("La ruta especificada :", self.path, "no existe", file=sys.stderr)
+            sys.exit(-1)
+        
 
-        if len(program)>0: self.element[RowProgram.titlesColums[3]]  = program.split(sep=",")
+        if len(program)>0: self.program  = program.split(sep=",")
         else:
             print("No se añadio un programa")
             sys.exit(-1)
-        self.element[RowProgram.titlesColums[4]] = config
-        self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
-        self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
-        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.element["SSH"], device=self.element["Device"],path=self.path, program=self.element["Program"], config=self.element["Config"])
-        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(ssh=self.element["SSH"], device=self.element["Device"],path=self.path)
+        self.config = config
+        self.element[RowProgram.titlesColums[3]] = QtWidgets.QLabel(text=program)
+        self.element[RowProgram.titlesColums[4]] = QtWidgets.QLabel(text=config)
+        self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.ssh, device=self.device,path=self.path)
+        self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.ssh, device=self.device,path=self.path)
+        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.ssh, device=self.device,path=self.path, program=self.program, config=self.config)
+        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(ssh=self.ssh, device=self.device,path=self.path)
         
-        
+    def __del__(self):
+        self.ping = False
+
+
     def get_row(self):
         return self.element
-        
+
+    def fping(self):
+        command = ['ping', "-c", '1', self.device[self.device.find("@")+1:]]
+        while self.ping:
+            ret = subprocess.run(args=command,universal_newlines=True, stdout=subprocess.PIPE)
+            if (ret.returncode == 0):
+                out = ret.stdout
+                print(command, out[out.find("time=")+5:out.find("ms")])
+                self.element[RowProgram.titlesColums[1]].setText(out[out.find("time=")+5:out.find("ms")])
+            else:
+                print(command, "--")
+                self.element[RowProgram.titlesColums[1]].setText("--")
+    
+            time.sleep(1)
 
     
 class EditButton():

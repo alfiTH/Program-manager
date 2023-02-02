@@ -43,13 +43,10 @@ class MyWidget(QtWidgets.QWidget):
         self.table.setHorizontalHeaderLabels(columnas)
 
         for y in range(self.row):
-            
             tableRow = EditUI.RowProgram(ssh=config["SSH"].iloc[y], 
                     device=config["Device"].iloc[y],ping=config["Ping"].iloc[y],path=config["Path"].iloc[y],
                     program=config["Program"].iloc[y], config=config["Config"].iloc[y])
-            row = tableRow.get_row()
             for x, cell in enumerate(tableRow.get_row().values()):
-                print("Cell", x, cell)
                 self.table.setCellWidget(y,x,cell)
 
             # btn_sell = row.startStop
@@ -77,7 +74,7 @@ class MyWidget(QtWidgets.QWidget):
 if __name__ == "__main__":
 
     app = QtWidgets.QApplication([])
-    config = loadconfig("etc/config.csv").astype("string")
+    config = loadconfig(sys.argv[1]).astype("string")
     print(config.to_string())
     widget = MyWidget(config=config)
     widget.resize(1100, 600)
