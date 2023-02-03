@@ -31,6 +31,7 @@ class MyWidget(QtWidgets.QWidget):
         columnas = EditUI.RowProgram.titlesColums
         self.table.setColumnCount(len(columnas))
         self.row = len(config.index)
+        self.rows =[]
         #self.setCentralWidget(self.table)
 
         #Ajuste de columnas a estrechas
@@ -43,18 +44,19 @@ class MyWidget(QtWidgets.QWidget):
         self.table.setHorizontalHeaderLabels(columnas)
 
         for y in range(self.row):
-            tableRow = EditUI.RowProgram(ssh=config["SSH"].iloc[y], 
+            self.rows.append(EditUI.RowProgram(ssh=config["SSH"].iloc[y], 
                     device=config["Device"].iloc[y],ping=config["Ping"].iloc[y],path=config["Path"].iloc[y],
-                    program=config["Program"].iloc[y], config=config["Config"].iloc[y])
-            for x, cell in enumerate(tableRow.get_row().values()):
+                    program=config["Program"].iloc[y], config=config["Config"].iloc[y]))
+            for x, cell in enumerate(self.rows[y].get_row().values()):
                 self.table.setCellWidget(y,x,cell)
-
-            # btn_sell = row.startStop
-            # btn_sell.clicked.connect(self.handleButtonClicked)
-            # self.table.setCellWidget(index,2,btn_sell)
         
         # child = threading.Thread(target=self.process_widget, daemon=True)
         # child.start()
+
+    def __del__ (self):
+        print("delete all")
+        for r in self.rows:
+            r.__del__()
 
     def process_widget(self):
         while True:
@@ -80,8 +82,10 @@ if __name__ == "__main__":
     widget.resize(1100, 600)
     widget.show()
     
+    app.exec()
+    widget.__del__()
     
-    sys.exit(app.exec())
+    sys.exit()
 
 
 
