@@ -7,9 +7,10 @@ int main(int argc, char const *argv[])
     for(int i = 0; i < argc;i++)
         std::cout <<argv[i] << std::endl;
     std::cout << "holaaaa soy c"<<std::endl;
-    for (int i = 0; i <100;i++) {
+    for (int i = 0; i <50;i++) {
         std::cout <<"k"<<i<<std::endl;
-        sleep(0.001);
+        std::cout.flush();
+        sleep(1);
     }
 
 

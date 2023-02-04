@@ -69,7 +69,7 @@ class RowProgram():
         self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.ssh, device=self.device,path=self.path)
         self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.ssh, device=self.device,path=self.path)
         self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.ssh, device=self.device,path=self.path, program=self.program, config=self.config)
-        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(device=self.device,program=self.program)
+        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(device=self.device, startStopButton=self.element[RowProgram.titlesColums[7]],program=self.program)
         
     def __del__(self):
         self.ping = False
@@ -100,7 +100,9 @@ class EditButton():
         def __init__(self, ssh=False, device=None, path=None, parent=None):
             super(EditButton.BasicButton, self).__init__(parent)
             #Proseso de ejecucion asignado al botón
-            self.process = None
+            self.process = subprocess.Popen(universal_newlines=True,shell=True, args=["echo OK"]
+                            , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
+            
             self.ssh = ssh
             self.device = device
             self.path = path
@@ -129,31 +131,30 @@ class EditButton():
 
         def __del__(self):
             super(EditButton.StartStop, self).__del__()
-            if not self.process is None:
+            if not self.process.poll() is None:
                 self.stop_program()
 
 
         def function(self):
-            if self.run:
+            if self.process.poll() is None:
                 self.stop_program()
             else:
                 self.launch_program()
             time.sleep(0.5)
         
         def stop_program (self):
-            if not self.process is None: 
-                self.process.stdin.close()
-                self.process.stderr.close()
-                self.process.stdout.close()
-                self.process.kill()
-                self.setStyleSheet("background-color: red")
-                self.setText("Start")
-                self.process = None
-                self.run = False
+            # self.process.stdin.close()
+            # self.process.stderr.close()
+            # self.process.stdout.close()
+            self.process.kill()
+            self.process.wait()
+            self.setStyleSheet("background-color: red")
+            self.setText("Start")
+            self.run = False
 
         def launch_program(self):
             self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
-                            , stdout=subprocess.PIPE, stdin=subprocess.PIPE , stderr=subprocess.PIPE  )
+                            , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
             self.run = True
             self.setStyleSheet("background-color: green")
             self.setText("Stop")
@@ -162,17 +163,14 @@ class EditButton():
 
 
         def monitor_program(self):
-            print("monitoring")
-            while self.run:
-                try:
-                    salida = self.process.stdout.readline()
-                    print("program ", self.process.args)
-                    if len(salida)>0: print("CAPTURADO POR LA PIPE", salida)
-                    status = self.process.poll()
-                    if not status is None: self.stop_program()
-                except:
-                    pass
-                    
+            status = self.process.poll()
+            while status is None:
+                status = self.process.poll()
+                print(status)
+                if status is not None: self.stop_program()
+            if status !=0 and status is not None: 
+                pass #todo parpadeo
+                self.setText("ERROR")
             print ( "//////////////Resultado de programa: ", status, "//////////////////")
 
     class Terminal(BasicButton):
@@ -195,11 +193,12 @@ class EditButton():
                     self.close_window()    
             
             def show_window(self):
-                self.win =windowTerminal(program=self.startStopButton, name=self.device+" "+self.program[-1])
+                self.win =windowTerminal(buttonProcess=self.startStopButton, name=self.device+" "+self.program[-1])
             
             def close_window(self):
                 if self.win is not None:
                     self.win.close()
+                    self.win.__del__()
                     self.win = None
 
 
@@ -212,21 +211,21 @@ class EditButton():
 
             def __del__(self):
                 super(EditButton.Clean, self).__del__()
-                if not self.process is None: 
+                if self.process.poll() is None: 
                     print ( "pid: ", self.process.poll())
                     self.process.kill()
 
             def function(self):
-                if self.process is None:
+                if self.process.poll() is not None:
                     self.launch_program()
             
             def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, shell=True, args="rm -rf Cmake Makefile"
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, 
+                args=["make clean && rm -rf CMakeFiles cmake_install.cmake CMakeCache.txt Makefile"]
                                 , stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL , stderr=subprocess.DEVNULL  )
                 self.setStyleSheet("background-color: red")
                 while self.process.poll() is None: time.sleep(0.1)
-                print("Clean: ", self.process.returncode)
-                self.process = None
+                print("Clean: ", self.process.poll()) 
                 self.setStyleSheet("background-color: green")
 
 
@@ -238,22 +237,30 @@ class EditButton():
 
             def __del__(self):
                 super(EditButton.Clean, self).__del__()
-                if not self.process is None: 
+                if self.process.poll() is None: 
                     print ( "pid: ", self.process.poll())
                     self.process.kill()
 
             def function(self):
-                if self.process is None:
+                if self.process.poll() is not None:
                     self.launch_program()
             
             def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, shell=True, args=["cmake .",";","make -j20"]
-                                , stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL , stderr=subprocess.DEVNULL  )
+                
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, args=["cmake . && make -j20"]
+                                , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.STDOUT )
                 self.setStyleSheet("background-color: red")
                 while self.process.poll() is None: time.sleep(0.5)
-                print("Compile: ", self.process.returncode)
-                self.process = None
-                self.setStyleSheet("background-color: green")
+                #Fallo de compilacion
+                if self.process.poll() != 0 and self.process.poll() is not None:
+                    print("Compile ERROR")
+                    win = windowTerminal(buttonProcess=self.process, name=self.device+" "+self.program[-1])
+                    #todo intermitencia color
+                else:
+                    print("Compile Finished")
+                    self.setStyleSheet("background-color: green")
+                
+                
                 
     
 
@@ -263,17 +270,38 @@ class windowTerminal(QtWidgets.QWidget):
     This "window" is a QWidget. If it has no parent, it
     will appear as a free-floating window as we want.
     """
-    def __init__(self, program, name ):
+    def __init__(self, buttonProcess, name ):
         super().__init__()
+        self.buttonProcess = buttonProcess
         self.setWindowTitle(name)
         self.resize(500, 500)
         layout = QtWidgets.QVBoxLayout()
-        self.label = QtWidgets.QLabel(name)
+        self.label = QtWidgets.QLabel(" ")
         layout.addWidget(self.label)
         self.setLayout(layout)
         self.show()
+        self.runTerm = True
         self.term = Thread(target=self.monitor_terminal, daemon=True)
         self.term.start()
     
+    def __del__(self):
+        self.runTerm = False
+        self.term.join()
+        
+    
     def monitor_terminal(self):
-        pass
+        while self.runTerm:
+            if self.buttonProcess.process is not None:
+                process = self.buttonProcess.process
+                salida =[]
+                print("monitoring")
+                while self.runTerm:
+                    try:
+                        salida = (salida + [process.stdout.readline()])[-20:]
+                        print("program ", process.args)
+                        print("CAPTURADO POR LA PIPE: \n", ''.join(salida))
+                        self.label.setText(' '.join(salida))
+                        if salida[-1] == '' or process.poll() is not None: break  
+                    except IOError:
+                        break           
+            
