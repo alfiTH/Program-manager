@@ -106,16 +106,45 @@ class EditButton():
             self.ssh = ssh
             self.device = device
             self.path = path
+            self.blinking = False
+            self.threadBlinking = None
             self.clicked.connect(self.function)
             
 
         def __del__(self):
             print('Destructor ', self.__class__.__name__)
-            
+            if self.blinking:
+                self.blinking = False
+                self.threadBlinking.join()
+
+
 
         def function(self):
             print("Basic Button")
 
+        #blink dicionario{"color1":, "color2":, "text1":, "text2":, "period""}
+        def set_style(self, color = None, text = None, blink = None):
+            if blink is not None:
+                self.blinking = True
+                self.threadBlinking = Thread(target=self.blink,args=[blink], daemon=True)
+                self.threadBlinking.start()
+            else:
+                if self.blinking:
+                    self.blinking = False
+                    self.threadBlinking.join()
+                if text is not None:
+                    self.setText(text)
+                if color is not None:
+                    self.setStyleSheet(color)
+
+        def blink(self, configBlink):
+            while self.blinking:
+                self.setStyleSheet(configBlink["color1"])
+                self.setText(configBlink["text1"])
+                time.sleep(configBlink["period"])
+                self.setStyleSheet(configBlink["color2"])
+                self.setText(configBlink["text2"])
+                time.sleep(configBlink["period"])
 
 
     class StartStop(BasicButton):
@@ -125,15 +154,12 @@ class EditButton():
             self.program = program
             self.config = config
             self.run = False
-            self.setStyleSheet("background-color: red")
-            self.setText("Start")
-            
+            self.set_style(color="background-color: red", text="Start")            
 
         def __del__(self):
             super(EditButton.StartStop, self).__del__()
             if not self.process.poll() is None:
                 self.stop_program()
-
 
         def function(self):
             if self.process.poll() is None:
@@ -148,16 +174,14 @@ class EditButton():
             # self.process.stdout.close()
             self.process.kill()
             self.process.wait()
-            self.setStyleSheet("background-color: red")
-            self.setText("Start")
+            self.set_style(color="background-color: red", text="Start") 
             self.run = False
 
         def launch_program(self):
             self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
                             , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
             self.run = True
-            self.setStyleSheet("background-color: green")
-            self.setText("Stop")
+            self.set_style(color="background-color: green", text="Stop") 
             child = Thread(target=self.monitor_program, daemon=True)
             child.start()
 
@@ -169,8 +193,9 @@ class EditButton():
                 print(status)
                 if status is not None: self.stop_program()
             if status !=0 and status is not None: 
-                pass #todo parpadeo
-                self.setText("ERROR")
+                self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":str(status), "period":0.5})
             print ( "//////////////Resultado de programa: ", status, "//////////////////")
 
     class Terminal(BasicButton):
@@ -178,7 +203,7 @@ class EditButton():
                 super(EditButton.Terminal, self).__init__(device=device,parent=parent)
                 self.program = program
                 self.startStopButton = startStopButton
-                self.setText("Terminal")
+                self.set_style(text="Terminal") 
                 self.win = None
 
             def __del__(self):
@@ -206,8 +231,7 @@ class EditButton():
     class Clean(BasicButton):
             def __init__(self,ssh=False, device=None, path=None, parent=None):
                 super(EditButton.Clean, self).__init__(ssh, device, path, parent)
-                self.setStyleSheet("background-color: green")
-                self.setText("Clean")
+                self.set_style(color="background-color: green", text="Clean") 
 
             def __del__(self):
                 super(EditButton.Clean, self).__del__()
@@ -223,17 +247,21 @@ class EditButton():
                 self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, 
                 args=["make clean && rm -rf CMakeFiles cmake_install.cmake CMakeCache.txt Makefile"]
                                 , stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL , stderr=subprocess.DEVNULL  )
-                self.setStyleSheet("background-color: red")
-                while self.process.poll() is None: time.sleep(0.1)
+                self.set_style(color="background-color: red", text="Cleaning") 
+                self.process.wait()
                 print("Clean: ", self.process.poll()) 
-                self.setStyleSheet("background-color: green")
+                if self.process.poll() != 0:
+                    self.set_style(self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":str(self.process.poll()), "period":0.5})) 
+                else:
+                    self.set_style(color="background-color: green", text="Clean") 
 
 
     class Compile(BasicButton):
             def __init__(self,ssh=False, device=None, path=None, parent=None):
-                super(EditButton.Compile, self).__init__(ssh, device, path, parent)           
-                self.setStyleSheet("background-color: green")
-                self.setText("Compile")
+                super(EditButton.Compile, self).__init__(ssh, device, path, parent)   
+                self.set_style(color="background-color: green", text="Compile")         
 
             def __del__(self):
                 super(EditButton.Clean, self).__del__()
@@ -249,21 +277,17 @@ class EditButton():
                 
                 self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, args=["cmake . && make -j20"]
                                 , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.STDOUT )
-                self.setStyleSheet("background-color: red")
-                while self.process.poll() is None: time.sleep(0.5)
-                #Fallo de compilacion
-                if self.process.poll() != 0 and self.process.poll() is not None:
-                    print("Compile ERROR")
-                    win = windowTerminal(buttonProcess=self.process, name=self.device+" "+self.program[-1])
-                    #todo intermitencia color
-                else:
-                    print("Compile Finished")
-                    self.setStyleSheet("background-color: green")
-                
-                
-                
-    
+                self.set_style(color="background-color: red", text="Compiling")   
 
+                self.process.wait()
+                #Fallo de compilacion
+                if self.process.poll() != 0:
+                    self.set_style(self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":str(self.process.poll()), "period":0.5})) 
+                    win = windowTerminal(buttonProcess=self.process, name=self.device+" "+self.program[-1])
+                else:
+                    self.set_style(color="background-color: green", text="Compile") 
 
 class windowTerminal(QtWidgets.QWidget):
     """
