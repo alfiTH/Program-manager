@@ -1,5 +1,5 @@
 Device;SSH;Ping;Path;Program;Config
-robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/t;python3,calculator.py; 
-robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;python3,hola.py; 
-robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;./cc.o; 
-robolab@158.49.247.198;off;off;Documentos/Alejandro/Program-manager/tmp;./cc.o; 
+robolab@158.49.247.194;off;on;Documentos/Alejandro/Program-manager/tmp/Calculadora;src/calculator.py; 
+robolab@158.49.247.194;off;on;Documentos/Alejandro/Program-manager/tmp/hola;src/hola.py; 
+robolab@158.49.247.194;on;off;Documentos/Alejandro/Program-manager/tmp/componente_c;src/Contador;hola
+robolab@158.49.247.194;off;off;Documentos/Alejandro/Program-manager/tmp/componente_c;src/Contador;hola

@@ -21,11 +21,12 @@ __status__ = "Prototype"
 
 
 class RowProgram():
-    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal"]
+    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal", "Restart"]
     def __init__(self, device=None, ssh="off", ping ="off", path=None, program="", config=""):
 
         #TODO cambiar a diccionario pasar key en fuuncion get y value en la otra
         self.element={}
+        self.program = ""
 
         #Usuario@IP para ssh y visulización
         if not "@" in device:
@@ -37,10 +38,8 @@ class RowProgram():
         self.device = device
         self.element[RowProgram.titlesColums[0]] = QtWidgets.QLabel(text=device)
 
-        self.ssh = ["ssh", "-tt"] if ssh.lower()=="on" or ssh.lower()=="-x11" else []
-        if ssh.lower() == "-x11": 
-            self.ssh.append("-X11")
-        self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
+        
+
 
         self.ping = True if ping.lower()=="on" else False
         if self.ping:
@@ -53,24 +52,37 @@ class RowProgram():
             print("No se añadió ruta de programa", file=sys.stderr)
             sys.exit(-1)
         else : self.path = path if path[0] == '/' else os.path.expanduser('~') + "/" + path[0].replace('~', '') + path[1:]
-        #TODO dIFERENCIAR SSH
+
+        if ssh.lower()=="on" or ssh.lower()=="-x11":
+            self.ssh = "ssh "
+            if ssh.lower() == "-x11": 
+                self.ssh += "-X "
+            self.program +=  self.ssh + self.device + " " +self.path+"/"
+        else :
+            self.ssh = "OFF"
+        
+
+        self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
         if not os.path.exists(self.path):
             print("La ruta especificada :", self.path, "no existe", file=sys.stderr)
             sys.exit(-1)
         
 
-        if len(program)>0: self.program  = program.split(sep=" ")
+        if len(program)>0: self.program  += program
         else:
             print("No se añadio un programa")
             sys.exit(-1)
-        self.config = config
+        self.program += " " + config
+
+        self.autoStart = QtWidgets.QCheckBox("")
+
         self.element[RowProgram.titlesColums[3]] = QtWidgets.QLabel(text=program)
         self.element[RowProgram.titlesColums[4]] = QtWidgets.QLabel(text=config)
         self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.ssh, device=self.device,path=self.path)
         self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.ssh, device=self.device,path=self.path)
-        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.ssh, device=self.device,path=self.path, program=self.program, config=self.config)
+        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.ssh, device=self.device,path=self.path, program=self.program, config=config)
         self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(device=self.device, startStopButton=self.element[RowProgram.titlesColums[7]],program=self.program)
-        
+        self.element[RowProgram.titlesColums[9]] = self.autoStart
     def __del__(self):
         self.ping = False
 
@@ -97,7 +109,7 @@ class RowProgram():
 class EditButton():
 
     class BasicButton(QtWidgets.QPushButton):
-        def __init__(self, ssh=False, device=None, path=None, parent=None):
+        def __init__(self, ssh=[], device=None, path=None, parent=None):
             super(EditButton.BasicButton, self).__init__(parent)
             #Proseso de ejecucion asignado al botón
             self.process = subprocess.Popen(universal_newlines=True,shell=True, args=["echo OK"]
@@ -148,7 +160,7 @@ class EditButton():
 
 
     class StartStop(BasicButton):
-        def __init__(self,ssh=False, device=None, path=None, program=[], config="", parent=None):
+        def __init__(self,ssh=[], device=None, path=None, program=[], config="", parent=None):
             super(EditButton.StartStop, self).__init__(ssh, device, path, parent)
 
             self.program = program
@@ -172,13 +184,14 @@ class EditButton():
             # self.process.stdin.close()
             # self.process.stderr.close()
             # self.process.stdout.close()
-            self.process.kill()
+            self.process.terminate()
             self.process.wait()
             self.set_style(color="background-color: red", text="Start") 
             self.run = False
 
         def launch_program(self):
-            self.process = subprocess.Popen(universal_newlines=True, cwd=self.path, args=self.program + [self.config]
+            print("Ejecutando",self.program, [self.config])
+            self.process = subprocess.Popen(universal_newlines=True,shell=True, cwd=self.path, args=self.program 
                             , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
             self.run = True
             self.set_style(color="background-color: green", text="Stop") 
@@ -187,15 +200,13 @@ class EditButton():
 
 
         def monitor_program(self):
-            status = self.process.poll()
-            while status is None:
-                status = self.process.poll()
-                print(status)
-                if status is not None: self.stop_program()
-            if status !=0 and status is not None: 
+            status = self.process.wait()
+            self.run = False
+            if status != 0 and status != -15: 
                 self.set_style(blink={"color1":"background-color: red", 
                     "color2":"background-color: black", "text1":"ERROR", 
                     "text2":str(status), "period":0.5})
+            else: self.set_style(color="background-color: red", text="Start") 
             print ( "//////////////Resultado de programa: ", status, "//////////////////")
 
     class Terminal(BasicButton):
@@ -229,7 +240,7 @@ class EditButton():
 
 
     class Clean(BasicButton):
-            def __init__(self,ssh=False, device=None, path=None, parent=None):
+            def __init__(self,ssh=[], device=None, path=None, parent=None):
                 super(EditButton.Clean, self).__init__(ssh, device, path, parent)
                 self.set_style(color="background-color: green", text="Clean") 
 
@@ -259,7 +270,7 @@ class EditButton():
 
 
     class Compile(BasicButton):
-            def __init__(self,ssh=False, device=None, path=None, parent=None):
+            def __init__(self,ssh=[], device=None, path=None, parent=None):
                 super(EditButton.Compile, self).__init__(ssh, device, path, parent)   
                 self.set_style(color="background-color: green", text="Compile")         
 
@@ -275,7 +286,7 @@ class EditButton():
             
             def launch_program(self):
                 
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, args=["cmake . && make -j20"]
+                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/src", shell=True, args=["cmake . && make -j20"]
                                 , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.STDOUT )
                 self.set_style(color="background-color: red", text="Compiling")   
 
@@ -307,25 +318,21 @@ class windowTerminal(QtWidgets.QWidget):
         self.runTerm = True
         self.term = Thread(target=self.monitor_terminal, daemon=True)
         self.term.start()
+        
     
     def __del__(self):
         self.runTerm = False
         self.term.join()
-        
-    
+
     def monitor_terminal(self):
+        process = self.buttonProcess.process
         while self.runTerm:
-            if self.buttonProcess.process is not None:
-                process = self.buttonProcess.process
-                salida =[]
-                print("monitoring")
-                while self.runTerm:
-                    try:
-                        salida = (salida + [process.stdout.readline()])[-20:]
-                        print("program ", process.args)
-                        print("CAPTURADO POR LA PIPE: \n", ''.join(salida))
-                        self.label.setText(' '.join(salida))
-                        if salida[-1] == '' or process.poll() is not None: break  
-                    except IOError:
-                        break           
-            
+            salida =[]
+            try:
+                for line in process.stdout:
+                    salida = (salida + [line.strip()+"\n"])[-20:]
+                    self.label.setText(' '.join(salida))
+                    if not self.runTerm: break
+            except:
+                break      
+            time.sleep(0.001)

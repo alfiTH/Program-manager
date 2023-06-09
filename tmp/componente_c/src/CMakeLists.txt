@@ -1,3 +1,4 @@
+
 PROJECT(Contador)
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 # Indicamos la versión mínima que necesitamos de CMake
