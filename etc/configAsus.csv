@@ -1,5 +1,5 @@
 Device;SSH;Ping;Path;Program;Config
-alfiTH@192.168.1.138;off;on;UNEX/Laboratorio/Program-manager;python3 tmp/calculator.py; 
+alfiTH@127.0.0.1;off;on;UNEX/Laboratorio/Program-manager;python3 tmp/calculator.py; 
 alfiTH@192.168.1.254;off;on;UNEX/Laboratorio/Program-manager;python3 tmp/hola.py; 
 alfiTH@192.168.1.138;off;off;UNEX/Laboratorio/Program-manager;python3 tmp/calculator.py; 
 alfiTH@192.168.1.138;off;off;UNEX/Laboratorio/Program-manager;./tmp/Contador;hola

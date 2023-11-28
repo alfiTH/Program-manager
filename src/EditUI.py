@@ -66,12 +66,12 @@ def exit_terminal(terminal_name):
     assert isinstance(terminal_name, str) , "Terminal name must be a string"
     if terminal_exists(terminal_name):
         subprocess.run(["killall", "-9", terminal_name.split("/")[1]])
-        time.sleep(1)#TODO comprobar PID activo? y por ssh?
+        time.sleep(1)#TODO comprobar PID activo? y por ssh? elif '/tmp/'+terminal_name+'.txt':?
         subprocess.run(['xdotool', 'search', '--name', terminal_name, 'windowclose'])
 
 
 class RowProgram():
-    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal"]
+    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal", "Restart"]
     def __init__(self, device=None, ssh="off", ping ="off", path=None, program="", config=""):
 
         #TODO cambiar a diccionario pasar key en fuuncion get y value en la otra
@@ -84,9 +84,16 @@ class RowProgram():
             assert  "@" in device, ("No se añadió correctamente el nombre: "+device+" Formato Usuario@IP ")
         self.element[RowProgram.titlesColums[0]] = QtWidgets.QLabel(text=device)
 
-        command_ssh = ["ssh", "-tt"] if ssh.lower()=="on" or ssh.lower()=="-x11" else []
-        if ssh.lower() == "-x11": 
-            command_ssh.append("-X11")
+
+
+#TODO JUTAR CD CON SSH?
+        if ssh.lower()=="on" or ssh.lower()=="-x11":
+            command_ssh = "ssh "
+            if ssh.lower() == "-x11": 
+                command_ssh += "-X "
+            command_ssh +=  command_ssh + device
+        else :
+            command_ssh = ""
         self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
 
         self.ping = True if ping.lower()=="on" else False
@@ -106,6 +113,8 @@ class RowProgram():
 
         assert len(program)>0, "No se añadió un programa"
 
+        self.autoStart = QtWidgets.QCheckBox("")
+
         ##TODO unificar comand_ssh con command_cd
         self.element[RowProgram.titlesColums[3]] = QtWidgets.QLabel(text=program)
         self.element[RowProgram.titlesColums[4]] = QtWidgets.QLabel(text=config)
@@ -113,6 +122,7 @@ class RowProgram():
         self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=command_ssh, path=command_cd)
         self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=command_ssh, path=command_cd, program=program+" "+ config)
         self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(terminal_name=program+" "+config)
+        self.element[RowProgram.titlesColums[9]] = self.autoStart
         
     def __del__(self):
         self.ping = False

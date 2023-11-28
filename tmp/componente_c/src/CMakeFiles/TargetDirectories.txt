@@ -1,3 +1,0 @@
-/home/robolab/Documentos/Alejandro/Program-manager/tmp/componente_c/src/CMakeFiles/Contador.dir
-/home/robolab/Documentos/Alejandro/Program-manager/tmp/componente_c/src/CMakeFiles/edit_cache.dir
-/home/robolab/Documentos/Alejandro/Program-manager/tmp/componente_c/src/CMakeFiles/rebuild_cache.dir

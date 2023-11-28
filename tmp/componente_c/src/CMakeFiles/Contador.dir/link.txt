@@ -1,1 +1,0 @@
-/usr/bin/c++ -rdynamic CMakeFiles/Contador.dir/contador.cpp.o -o Contador 
