@@ -19,79 +19,109 @@ __email__ = "atorrejo@alumnos.unex.es"
 __status__ = "Prototype"
 
 
+def terminal_exists(terminal_name):
+    assert isinstance(terminal_name, str) , "Terminal name must be a string"
+    return subprocess.run(['xdotool', 'search', '--name', terminal_name], stdout=subprocess.DEVNULL).returncode == 0
+
+def launch_terminal(terminal_name, command, comand_ssh=None, wait_close=True):
+    assert isinstance(terminal_name, str) , "Terminal name must be a string"
+    assert isinstance(command, str) , "Command must be a string"
+    assert isinstance(comand_ssh, str) or comand_ssh is None , "Command SSH must be a string"
+    if not terminal_exists(terminal_name):
+        if comand_ssh is None:
+            complete_command = ['gnome-terminal', '--title='+terminal_name, '--', 'bash', '-c', 
+                                command +'; echo $? > /tmp/'+terminal_name+'.txt;']
+        else:
+            pass #TODO:
+
+        if wait_close:
+            complete_command[5] = complete_command[5] + 'read -p "Press enter to exit"' 
+        
+        subprocess.run(complete_command)
+        time.sleep(0.1)
+        # Encuentra la ventana y ocúltala
+        subprocess.run(['xdotool', 'search', '--name', terminal_name, 'windowunmap'])
+    else:
+        print("WARNING: LA TERMINAL ", terminal_name, "EXISTE", file=sys.stderr)
+
+def edit_terminal(terminal_name, show=True, position=None, size=None):
+    assert isinstance(terminal_name, str) , "Terminal name must be a string"
+    assert isinstance(show, bool) , "Show must be a boolean"
+    assert position is None or ((isinstance(position, list) or isinstance(position, tuple) )and len(position)==2), "Terminal position must be a list or tuple, with 2 elements"
+    assert size is None or ((isinstance(size, list) or isinstance(size, tuple) )and len(size)==2), "Terminal size must be a list or tuple, with 2 elements"
+
+    if terminal_exists(terminal_name):
+        if show:
+            subprocess.run(['xdotool', 'search', '--name', terminal_name, 'windowmap'])
+        else:
+            subprocess.run(['xdotool', 'search', '--name', terminal_name, 'windowunmap'])
+
+        if position is not None:
+            pass #TODO
+        if size is not None:
+            pass #TODO  
+
+#TODO muerte brusca
+def exit_terminal(terminal_name):
+    assert isinstance(terminal_name, str) , "Terminal name must be a string"
+    if terminal_exists(terminal_name):
+        subprocess.run(["killall", "-9", terminal_name.split("/")[1]])
+        time.sleep(1)#TODO comprobar PID activo? y por ssh?
+        subprocess.run(['xdotool', 'search', '--name', terminal_name, 'windowclose'])
+
 
 class RowProgram():
-    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal", "Restart"]
+    titlesColums=["Device", "SSH", "Ping", "Program", "Config", "Clean", "Compile", "Start/Stop", "Terminal"]
     def __init__(self, device=None, ssh="off", ping ="off", path=None, program="", config=""):
 
         #TODO cambiar a diccionario pasar key en fuuncion get y value en la otra
         self.element={}
-        self.program = ""
 
         #Usuario@IP para ssh y visulización
         if not "@" in device:
-            if device is None:
-                print("No se añadió Nombre de usuario ni IP", file=sys.stderr)
-            else:
-                print("No se añadió correctamente el nombre: ", device," Formato Usuario@IP ", file=sys.stderr)
-            sys.exit(-1)
-        self.device = device
+            
+            assert device is not None, "No se añadió Nombre de usuario ni IP"
+            assert  "@" in device, ("No se añadió correctamente el nombre: "+device+" Formato Usuario@IP ")
         self.element[RowProgram.titlesColums[0]] = QtWidgets.QLabel(text=device)
 
-        
-
+        command_ssh = ["ssh", "-tt"] if ssh.lower()=="on" or ssh.lower()=="-x11" else []
+        if ssh.lower() == "-x11": 
+            command_ssh.append("-X11")
+        self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
 
         self.ping = True if ping.lower()=="on" else False
         if self.ping:
-            threadPing = Thread(target=self.fping, daemon=True)
+            threadPing = Thread(target=self.fping, args=(device), daemon=True)
             threadPing.start()
         self.element[RowProgram.titlesColums[2]] = QtWidgets.QLabel(text=str(self.ping))
 
         #Ruta de base del programa
-        if path is None:
-            print("No se añadió ruta de programa", file=sys.stderr)
-            sys.exit(-1)
-        else : self.path = path if path[0] == '/' else os.path.expanduser('~') + "/" + path[0].replace('~', '') + path[1:]
-
-        if ssh.lower()=="on" or ssh.lower()=="-x11":
-            self.ssh = "ssh "
-            if ssh.lower() == "-x11": 
-                self.ssh += "-X "
-            self.program +=  self.ssh + self.device + " " +self.path+"/"
-        else :
-            self.ssh = "OFF"
-        
-
-        self.element[RowProgram.titlesColums[1]] = QtWidgets.QLabel(text=ssh)
-        if not os.path.exists(self.path):
-            print("La ruta especificada :", self.path, "no existe", file=sys.stderr)
-            sys.exit(-1)
-        
-
-        if len(program)>0: self.program  += program
+        assert path is not None, "No se añadió ruta de programa"
+        if len(command_ssh)==0:
+            command_cd = path if path[0] == '/' else os.path.expanduser('~') + "/" + path[0].replace('~', '') + path[1:]
+            assert os.path.exists(command_cd), ("La ruta especificada :"+command_cd+"no existe")
+            command_cd = "cd " + command_cd
         else:
-            print("No se añadio un programa")
-            sys.exit(-1)
-        self.program += " " + config
+            pass #TODO dIFERENCIAR SSH
 
-        self.autoStart = QtWidgets.QCheckBox("")
+        assert len(program)>0, "No se añadió un programa"
 
+        ##TODO unificar comand_ssh con command_cd
         self.element[RowProgram.titlesColums[3]] = QtWidgets.QLabel(text=program)
         self.element[RowProgram.titlesColums[4]] = QtWidgets.QLabel(text=config)
-        self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=self.ssh, device=self.device,path=self.path)
-        self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=self.ssh, device=self.device,path=self.path)
-        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=self.ssh, device=self.device,path=self.path, program=self.program, config=config)
-        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(device=self.device, startStopButton=self.element[RowProgram.titlesColums[7]],program=self.program)
-        self.element[RowProgram.titlesColums[9]] = self.autoStart
+        self.element[RowProgram.titlesColums[5]] = EditButton.Clean(ssh=command_ssh, path=command_cd)
+        self.element[RowProgram.titlesColums[6]] = EditButton.Compile(ssh=command_ssh, path=command_cd)
+        self.element[RowProgram.titlesColums[7]] = EditButton.StartStop(ssh=command_ssh, path=command_cd, program=program+" "+ config)
+        self.element[RowProgram.titlesColums[8]] = EditButton.Terminal(terminal_name=program+" "+config)
+        
     def __del__(self):
         self.ping = False
-
 
     def get_row(self):
         return self.element
 
-    def fping(self):
-        command = ['ping', "-c", '1', self.device[self.device.find("@")+1:]]
+    def fping(self, device):
+        command = ['ping', "-c", '1', device[device.find("@")+1:]]
         while self.ping:
             ret = subprocess.run(args=command,universal_newlines=True, stdout=subprocess.PIPE)
             if (ret.returncode == 0):
@@ -101,23 +131,16 @@ class RowProgram():
             else:
                 #print(command, "--")
                 self.element[RowProgram.titlesColums[2]].setText("--")
-    
-            time.sleep(1)
-
-    
+            time.sleep(1)    
 
 class EditButton():
 
     class BasicButton(QtWidgets.QPushButton):
-        def __init__(self, ssh=[], device=None, path=None, parent=None):
+        def __init__(self, ssh="", path="", parent=None):
             super(EditButton.BasicButton, self).__init__(parent)
-            #Proseso de ejecucion asignado al botón
-            self.process = subprocess.Popen(universal_newlines=True,shell=True, args=["echo OK"]
-                            , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
-            
-            self.ssh = ssh
-            self.device = device
-            self.path = path
+
+            self.comand_ssh = ssh #TODO
+            self.comand_cd = path
             self.blinking = False
             self.threadBlinking = None
             self.clicked.connect(self.function)
@@ -129,7 +152,8 @@ class EditButton():
                 self.blinking = False
                 self.threadBlinking.join()
 
-
+        def check(self):
+            print('Checking Basic Button')
 
         def function(self):
             print("Basic Button")
@@ -160,179 +184,116 @@ class EditButton():
 
 
     class StartStop(BasicButton):
-        def __init__(self,ssh=[], device=None, path=None, program=[], config="", parent=None):
-            super(EditButton.StartStop, self).__init__(ssh, device, path, parent)
+        def __init__(self, ssh, path, program, parent=None):
+            super(EditButton.StartStop, self).__init__(ssh, path, parent)
 
             self.program = program
-            self.config = config
             self.run = False
             self.set_style(color="background-color: red", text="Start")            
 
         def __del__(self):
             super(EditButton.StartStop, self).__del__()
-            if not self.process.poll() is None:
-                self.stop_program()
+            exit_terminal(self.program)
 
+##TODO mover al otro lado para tener centralizado por columnas llamando al check, meter en el basic
+        def check(self):
+            if self.run:
+                if not terminal_exists(self.program):
+                    self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":"No terminal", "period":0.5})
+                    return False
+                #elif '/tmp/'+terminal_name+'.txt': TODO
+                    self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":"Finish", "period":0.5})
+                    return False
+                return True
+            return False
+        
         def function(self):
-            if self.process.poll() is None:
-                self.stop_program()
-            else:
-                self.launch_program()
-            time.sleep(0.5)
+            if not terminal_exists(self.program):
+                launch_terminal(self.program, self.comand_cd+" && "+self.program)
+                self.set_style(color="background-color: green", text="Stop") 
+                self.run = True
         
         def stop_program (self):
-            # self.process.stdin.close()
-            # self.process.stderr.close()
-            # self.process.stdout.close()
-            self.process.terminate()
-            self.process.wait()
+            exit_terminal(self.program)
             self.set_style(color="background-color: red", text="Start") 
             self.run = False
 
-        def launch_program(self):
-            print("Ejecutando",self.program, [self.config])
-            self.process = subprocess.Popen(universal_newlines=True,shell=True, cwd=self.path, args=self.program 
-                            , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.PIPE  )
-            self.run = True
-            self.set_style(color="background-color: green", text="Stop") 
-            child = Thread(target=self.monitor_program, daemon=True)
-            child.start()
-
-
-        def monitor_program(self):
-            status = self.process.wait()
-            self.run = False
-            if status != 0 and status != -15: 
-                self.set_style(blink={"color1":"background-color: red", 
-                    "color2":"background-color: black", "text1":"ERROR", 
-                    "text2":str(status), "period":0.5})
-            else: self.set_style(color="background-color: red", text="Start") 
-            print ( "//////////////Resultado de programa: ", status, "//////////////////")
-
     class Terminal(BasicButton):
-            def __init__(self, device=None, program = None,  startStopButton = None, parent=None):
-                super(EditButton.Terminal, self).__init__(device=device,parent=parent)
-                self.program = program
-                self.startStopButton = startStopButton
-                self.set_style(text="Terminal") 
-                self.win = None
+        def __init__(self, program, parent=None):
+            super(EditButton.Terminal, self).__init__(parent=parent)
+            self.program = program
+            self.set_style(text="Terminal") 
+            self.open = False
 
-            def __del__(self):
-                super(EditButton.Terminal, self).__del__()
-                self.close_window()
+        def __del__(self):
+            super(EditButton.Terminal, self).__del__()
 
-            def function(self):
-                print(self.win)
-                if self.win is None :
-                    self.show_window()
-                else:
-                    self.close_window()    
-            
-            def show_window(self):
-                self.win =windowTerminal(buttonProcess=self.startStopButton, name=self.device+" "+self.program[-1])
-            
-            def close_window(self):
-                if self.win is not None:
-                    self.win.close()
-                    self.win.__del__()
-                    self.win = None
-
-
+        def function(self):
+            if self.open:
+                edit_terminal(self.program, False)
+            else:
+                edit_terminal(self.program, True)
+            self.open = not self.open
 
     class Clean(BasicButton):
-            def __init__(self,ssh=[], device=None, path=None, parent=None):
-                super(EditButton.Clean, self).__init__(ssh, device, path, parent)
-                self.set_style(color="background-color: green", text="Clean") 
+        def __init__(self,ssh, path, parent=None):
+            super(EditButton.Clean, self).__init__(ssh, path, parent)
+            self.set_style(color="background-color: green", text="Clean") 
 
-            def __del__(self):
-                super(EditButton.Clean, self).__del__()
-                if self.process.poll() is None: 
-                    print ( "pid: ", self.process.poll())
-                    self.process.kill()
-
-            def function(self):
-                if self.process.poll() is not None:
-                    self.launch_program()
+        def __del__(self):
+            super(EditButton.Clean, self).__del__()
             
-            def launch_program(self):
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, 
-                args=["make clean && rm -rf CMakeFiles cmake_install.cmake CMakeCache.txt Makefile"]
-                                , stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL , stderr=subprocess.DEVNULL  )
-                self.set_style(color="background-color: red", text="Cleaning") 
-                self.process.wait()
-                print("Clean: ", self.process.poll()) 
-                if self.process.poll() != 0:
-                    self.set_style(self.set_style(blink={"color1":"background-color: red", 
-                    "color2":"background-color: black", "text1":"ERROR", 
-                    "text2":str(self.process.poll()), "period":0.5})) 
-                else:
-                    self.set_style(color="background-color: green", text="Clean") 
+
+        def function(self):
+            if self.process.poll() is not None:
+                self.launch_program()
+        
+        def launch_program(self):
+            self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/tmp", shell=True, 
+            args=["make clean && rm -rf CMakeFiles cmake_install.cmake CMakeCache.txt Makefile"]
+                            , stdout=subprocess.DEVNULL, stdin=subprocess.DEVNULL , stderr=subprocess.DEVNULL  )
+            self.set_style(color="background-color: red", text="Cleaning") 
+            self.process.wait()
+            print("Clean: ", self.process.poll()) 
+            if self.process.poll() != 0:
+                self.set_style(self.set_style(blink={"color1":"background-color: red", 
+                "color2":"background-color: black", "text1":"ERROR", 
+                "text2":str(self.process.poll()), "period":0.5})) 
+            else:
+                self.set_style(color="background-color: green", text="Clean") 
 
 
     class Compile(BasicButton):
-            def __init__(self,ssh=[], device=None, path=None, parent=None):
-                super(EditButton.Compile, self).__init__(ssh, device, path, parent)   
-                self.set_style(color="background-color: green", text="Compile")         
+        def __init__(self,ssh=False, device=None, path=None, parent=None):
+            super(EditButton.Compile, self).__init__(ssh, device, path, parent)   
+            self.set_style(color="background-color: green", text="Compile")    
+            self.run = False     
 
-            def __del__(self):
-                super(EditButton.Clean, self).__del__()
-                if self.process.poll() is None: 
-                    print ( "pid: ", self.process.poll())
-                    self.process.kill()
+        def __del__(self):
+            super(EditButton.Clean, self).__del__()
+            exit_terminal("compile "+self.path[2:])
 
-            def function(self):
-                if self.process.poll() is not None:
-                    self.launch_program()
-            
-            def launch_program(self):
-                
-                self.process = subprocess.Popen(universal_newlines=True, cwd=self.path + "/src", shell=True, args=["cmake . && make -j20"]
-                                , stdout=subprocess.PIPE, stdin=subprocess.DEVNULL , stderr=subprocess.STDOUT )
-                self.set_style(color="background-color: red", text="Compiling")   
-
-                self.process.wait()
-                #Fallo de compilacion
-                if self.process.poll() != 0:
-                    self.set_style(self.set_style(blink={"color1":"background-color: red", 
+        def check(self):
+            if self.run:
+                if not terminal_exists("compile "+self.path[2:]):
+                    self.set_style(blink={"color1":"background-color: red", 
                     "color2":"background-color: black", "text1":"ERROR", 
-                    "text2":str(self.process.poll()), "period":0.5})) 
-                    win = windowTerminal(buttonProcess=self.process, name=self.device+" "+self.program[-1])
-                else:
-                    self.set_style(color="background-color: green", text="Compile") 
+                    "text2":"No terminal", "period":0.5})
+                    return False
+                #elif '/tmp/'+terminal_name+'.txt': TODO
+                    self.set_style(blink={"color1":"background-color: red", 
+                    "color2":"background-color: black", "text1":"ERROR", 
+                    "text2":"Finish", "period":0.5})
+                    return False
+                return True
+            return False
 
-class windowTerminal(QtWidgets.QWidget):
-    """
-    This "window" is a QWidget. If it has no parent, it
-    will appear as a free-floating window as we want.
-    """
-    def __init__(self, buttonProcess, name ):
-        super().__init__()
-        self.buttonProcess = buttonProcess
-        self.setWindowTitle(name)
-        self.resize(500, 500)
-        layout = QtWidgets.QVBoxLayout()
-        self.label = QtWidgets.QLabel(" ")
-        layout.addWidget(self.label)
-        self.setLayout(layout)
-        self.show()
-        self.runTerm = True
-        self.term = Thread(target=self.monitor_terminal, daemon=True)
-        self.term.start()
-        
-    
-    def __del__(self):
-        self.runTerm = False
-        self.term.join()
-
-    def monitor_terminal(self):
-        process = self.buttonProcess.process
-        while self.runTerm:
-            salida =[]
-            try:
-                for line in process.stdout:
-                    salida = (salida + [line.strip()+"\n"])[-20:]
-                    self.label.setText(' '.join(salida))
-                    if not self.runTerm: break
-            except:
-                break      
-            time.sleep(0.001)
+        def function(self):
+            if not terminal_exists("compile "+self.path[2:]):
+                launch_terminal("compile "+self.path[2:], self.comand_cd+" cmake . && make -j16", wait_close=False)
+                self.set_style(color="background-color: red", text="Compiling")   
+                self.run = True

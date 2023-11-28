@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 '''Programa de visualización y manejo de programas '''
 
@@ -6,7 +6,6 @@ import sys
 from PySide6 import QtCore, QtWidgets, QtGui
 import EditUI
 import time
-import threading
 import pandas
 
 
@@ -35,7 +34,7 @@ class MyWidget(QtWidgets.QWidget):
         #self.setCentralWidget(self.table)
 
         #Ajuste de columnas a estrechas
-        header = self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode().ResizeToContents) 
+        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode().ResizeToContents) 
         #Cantidad de filas
         self.table.setRowCount(self.row)
         #Tamaño y posicion tabla
@@ -49,24 +48,11 @@ class MyWidget(QtWidgets.QWidget):
                     program=config["Program"].iloc[y], config=config["Config"].iloc[y]))
             for x, cell in enumerate(self.rows[y].get_row().values()):
                 self.table.setCellWidget(y,x,cell)
-        
-        # child = threading.Thread(target=self.process_widget, daemon=True)
-        # child.start()
 
     def __del__ (self):
         print("delete all")
         for r in self.rows:
             r.__del__()
-
-    def process_widget(self):
-        while True:
-            time.sleep(1) 
-            self.table.setRowCount(5)
-            time.sleep(0.0001) 
-
-
-        
-
 
     def handleButtonClicked(self):
         button = self.sender()
@@ -74,10 +60,13 @@ class MyWidget(QtWidgets.QWidget):
         
 
 if __name__ == "__main__":
-
+    assert len(sys.argv) == 2, "Falta el config"
+    
     app = QtWidgets.QApplication([])
+
     config = loadconfig(sys.argv[1]).astype("string")
     print(config.to_string())
+
     widget = MyWidget(config=config)
     widget.resize(1100, 600)
     widget.show()
