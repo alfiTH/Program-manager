@@ -98,14 +98,14 @@ class RowProgram():
 
         self.ping = True if ping.lower()=="on" else False
         if self.ping:
-            threadPing = Thread(target=self.fping, args=(device), daemon=True)
+            threadPing = Thread(target=self.fping, args=(device,), daemon=True)
             threadPing.start()
         self.element[RowProgram.titlesColums[2]] = QtWidgets.QLabel(text=str(self.ping))
 
         #Ruta de base del programa
         assert path is not None, "No se añadió ruta de programa"
         if len(command_ssh)==0:
-            command_cd = path if path[0] == '/' else os.path.expanduser('~') + "/" + path[0].replace('~', '') + path[1:]
+            command_cd = path if path[0] == '/' else os.path.expanduser('~') + path[0].replace('~', '') + path[1:]
             assert os.path.exists(command_cd), ("La ruta especificada :"+command_cd+"no existe")
             command_cd = "cd " + command_cd
         else:
@@ -158,8 +158,9 @@ class EditButton():
 
         def __del__(self):
             print('Destructor ', self.__class__.__name__)
-            if self.blinking:
-                self.blinking = False
+            
+            self.blinking = False
+            if self.threadBlinking is not None:
                 self.threadBlinking.join()
 
         def check(self):
@@ -233,9 +234,9 @@ class EditButton():
             self.run = False
 
     class Terminal(BasicButton):
-        def __init__(self, program, parent=None):
+        def __init__(self, terminal_name, parent=None):
             super(EditButton.Terminal, self).__init__(parent=parent)
-            self.program = program
+            self.terminal_name = terminal_name
             self.set_style(text="Terminal") 
             self.open = False
 
@@ -244,9 +245,9 @@ class EditButton():
 
         def function(self):
             if self.open:
-                edit_terminal(self.program, False)
+                edit_terminal(self.terminal_name, False)
             else:
-                edit_terminal(self.program, True)
+                edit_terminal(self.terminal_name, True)
             self.open = not self.open
 
     class Clean(BasicButton):
@@ -278,8 +279,8 @@ class EditButton():
 
 
     class Compile(BasicButton):
-        def __init__(self,ssh=False, device=None, path=None, parent=None):
-            super(EditButton.Compile, self).__init__(ssh, device, path, parent)   
+        def __init__(self,ssh=False, path=None, parent=None):
+            super(EditButton.Compile, self).__init__(ssh, path, parent)   
             self.set_style(color="background-color: green", text="Compile")    
             self.run = False     
 

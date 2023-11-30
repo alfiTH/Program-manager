@@ -1,6 +1,6 @@
 Device;SSH;Ping;Path;Program;Config
-alfiTH@127.0.0.1;off;on;UNEX/Laboratorio/Program-manager;python3 tmp/calculator.py; 
-alfiTH@192.168.1.254;off;on;UNEX/Laboratorio/Program-manager;python3 tmp/hola.py; 
-alfiTH@192.168.1.138;off;off;UNEX/Laboratorio/Program-manager;python3 tmp/calculator.py; 
-alfiTH@192.168.1.138;off;off;UNEX/Laboratorio/Program-manager;./tmp/Contador;hola
-alfiTH@192.168.1.138;off;off;UNEX/Laboratorio/Program-manager;./tmp/Contador;hola
+alfiTH@127.0.0.1;off;on;~/UNEX/Laboratorio/Program-manager/tmp/Calculadora;src/calculator.py; 
+alfiTH@192.168.1.254;off;on;~/UNEX/Laboratorio/Program-manager/tmp/hola;src/hola.py; 
+alfiTH@192.168.1.138;off;off;~/UNEX/Laboratorio/Program-manager/tmp/Calculadora;python3 src/calculator.py; 
+alfiTH@192.168.1.138;off;off;~/UNEX/Laboratorio/Program-manager/tmp/componente_c;src/Contador;hola
+alfiTH@192.168.1.138;off;off;~/UNEX/Laboratorio/Program-manager/tmp/componente_c;src/Contador;hola
