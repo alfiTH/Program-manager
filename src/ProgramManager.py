@@ -5,8 +5,10 @@
 import sys
 from PySide6 import QtCore, QtWidgets, QtGui
 import EditUI
-import time
+from threading import Thread
 import pandas
+import time
+import os
 
 
 __author__ = EditUI.__author__
@@ -20,7 +22,12 @@ __email__ = EditUI.__email__
 __status__ = EditUI.__status__
 
 def loadconfig(filename):
-    return pandas.read_csv(filename,delimiter=";")
+    if filename.endswith('.csv'):
+        return pandas.read_csv(filename, delimiter=";")
+    elif filename.endswith('.json'):
+        return pandas.read_json(filename)
+    else:
+        raise ValueError("Unsupported config file format")
 
 
 class MyWidget(QtWidgets.QWidget):
@@ -42,21 +49,36 @@ class MyWidget(QtWidgets.QWidget):
         #Titulos de las columnas
         self.table.setHorizontalHeaderLabels(columnas)
 
+        if not os.path.exists("/tmp/ProgramManager"):
+            # La carpeta no existe, entonces la creamos
+            os.makedirs("/tmp/ProgramManager")
+
         for y in range(self.row):
-            self.rows.append(EditUI.RowProgram(ssh=config["SSH"].iloc[y], 
+            self.rows.append(EditUI.RowProgram(num_program=y, ssh=config["SSH"].iloc[y], 
                     device=config["Device"].iloc[y],ping=config["Ping"].iloc[y],path=config["Path"].iloc[y],
                     program=config["Program"].iloc[y], config=config["Config"].iloc[y]))
             for x, cell in enumerate(self.rows[y].get_row().values()):
                 self.table.setCellWidget(y,x,cell)
 
+        self.checker = True
+        threadCheck = Thread(target=self.checker_buttons, daemon=True)
+        threadCheck.start()
+
     def __del__ (self):
         print("delete all")
+        self.checker = False
         for r in self.rows:
             r.__del__()
 
     def handleButtonClicked(self):
         button = self.sender()
         button.function()
+    
+    def checker_buttons(self):
+        while self.checker:
+            for r in self.rows:
+                r.check_buttons()
+            time.sleep(1)
         
 
 if __name__ == "__main__":

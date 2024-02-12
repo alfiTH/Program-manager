@@ -1,0 +1,34 @@
+[
+    {
+      "Device": "robolab@158.49.247.194",
+      "SSH": "off",
+      "Ping": "on",
+      "Path": "~/Documentos/Alejandro/Program-manager/tmp/Calculadora",
+      "Program": "src/calculator.py",
+      "Config": ""
+    },
+    {
+      "Device": "robolab@158.49.247.194",
+      "SSH": "off",
+      "Ping": "on",
+      "Path": "~/Documentos/Alejandro/Program-manager/tmp/hola",
+      "Program": "src/hola.py",
+      "Config": ""
+    },
+    {
+      "Device": "robolab@158.49.247.194",
+      "SSH": "off",
+      "Ping": "off",
+      "Path": "~/Documentos/Alejandro/Program-manager/tmp/componente_c",
+      "Program": "bin/Contador",
+      "Config": "hola"
+    },
+    {
+      "Device": "robolab@158.49.247.194",
+      "SSH": "off",
+      "Ping": "off",
+      "Path": "~/Documentos/Alejandro/Program-manager/tmp/componente_c",
+      "Program": "bin/Contador",
+      "Config": "hola"
+    }
+  ]
