@@ -1,141 +1,140 @@
-#!/usr/bin/python3
-# -*- coding: utf-8 -*-
-'''Programa de visualización y manejo de programas '''
+# #!/usr/bin/python3
+# # -*- coding: utf-8 -*-
+# '''Programa de visualización y manejo de programas '''
 
-import sys
-from PySide6 import QtCore, QtWidgets, QtGui
-import EditUI
-from threading import Thread
-import pandas
+import psutil
+import subprocess
+import threading
 import time
 import os
+from flask import Flask, render_template, request, redirect, url_for, session
+from flask_socketio import SocketIO, emit
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import check_password_hash
+
+from utils.addUser import load_users
+import GPUtil
 
 
-__author__ = EditUI.__author__
-__copyright__ = EditUI.__copyright__
-__credits__ = EditUI.__credits__
-__license__ = EditUI.__license__
-__version__ = EditUI.__version__
-__date__ = EditUI.__date__
-__maintainer__ = EditUI.__maintainer__
-__email__ = EditUI.__email__
-__status__ = EditUI.__status__
+__author__ = "Alejandro Torrejón Harto"
+__copyright__ = "Copyright 2025, The Program Manager Project"
+__credits__ = ["Alejandro Torrejón Harto"]
+__license__ = "GNU General Public License v3.0"
+__version__ = "0.0.5"
+__date__ = "01/03/2025"
+__maintainer__ = "Alejandro Torrejón Harto"
+__email__ = "atorrejon@unex.es"
+__status__ = "Prototype"
 
-def loadconfig(filename):
-    if filename.endswith('.csv'):
-        return pandas.read_csv(filename, delimiter=";")
-    elif filename.endswith('.json'):
-        return pandas.read_json(filename)
-    else:
-        raise ValueError("Unsupported config file format")
+# def loadconfig(filename):
+#     if filename.endswith('.csv'):
+#         return pandas.read_csv(filename, delimiter=";")
+#     elif filename.endswith('.json'):
+#         return pandas.read_json(filename)
+#     else:
+#         raise ValueError("Unsupported config file format")
 
 
-class MyWidget(QtWidgets.QWidget):
-    def __init__(self, config):
-        super().__init__()
-        self.table = QtWidgets.QTableWidget(self)
-        columnas = EditUI.RowProgram.titlesColums
-        self.table.setColumnCount(len(columnas))
-        self.row = len(config.index)
-        self.rows =[]
-        #self.setCentralWidget(self.table)
 
-        #Ajuste de columnas a estrechas
-        self.table.horizontalHeader().setSectionResizeMode(QtWidgets.QHeaderView.ResizeMode().ResizeToContents) 
-        #Cantidad de filas
-        self.table.setRowCount(self.row)
-        #Tamaño y posicion tabla
-        self.table.setGeometry(QtCore.QRect(50, 0, 950, 36*self.row))
-        #Titulos de las columnas
-        self.table.setHorizontalHeaderLabels(columnas)
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
-        if not os.path.exists("/tmp/ProgramManager"):
-            # La carpeta no existe, entonces la creamos
-            os.makedirs("/tmp/ProgramManager")
+# Configuración de Flask
+app = Flask(__name__)
+app.secret_key = os.urandom(24)  # Clave secreta para sesiones
+app.config["SESSION_COOKIE_SECURE"] = True  # Asegura que la cookie solo se envíe por HTTPS
+app.config["SESSION_COOKIE_HTTPONLY"] = True  # Evita accesos desde JavaScript
+app.config["SESSION_COOKIE_SAMESITE"] = "Strict"  # Previene ataques CSRF
+socketio = SocketIO(app)
 
-        for y in range(self.row):
-            self.rows.append(EditUI.RowProgram(num_program=y, ssh=config["SSH"].iloc[y], 
-                    device=config["Device"].iloc[y],ping=config["Ping"].iloc[y],path=config["Path"].iloc[y],
-                    program=config["Program"].iloc[y], config=config["Config"].iloc[y]))
-            for x, cell in enumerate(self.rows[y].get_row().values()):
-                self.table.setCellWidget(y,x,cell)
+# Configuración de Flask-Login
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = "login"
 
-        self.checker = True
-        threadCheck = Thread(target=self.checker_buttons, daemon=True)
-        threadCheck.start()
+# Base de datos simulada de usuarios
+USERS = load_users()
 
-    def __del__ (self):
-        print("delete all")
-        self.checker = False
-        for r in self.rows:
-            r.__del__()
+class User(UserMixin):
+    def __init__(self, username):
+        self.id = username
 
-    def handleButtonClicked(self):
-        button = self.sender()
-        button.function()
-    
-    def checker_buttons(self):
-        while self.checker:
-            for r in self.rows:
-                r.check_buttons()
-            time.sleep(1)
+@login_manager.user_loader
+def load_user(user_id):
+    if user_id in USERS:
+        return User(user_id)
+    return None
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
         
+        # Verificar si el usuario existe y si la contraseña es correcta
+        if username in USERS and check_password_hash(USERS[username], password):
+            login_user(User(username))
+            return redirect(url_for("index"))
+        
+        return "Error: Nombre de usuario o contraseña incorrectos."
+    return render_template("login.html")
+
+@app.route("/logout")
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for("login"))
+
+@app.route("/")
+@login_required
+def index():
+    return render_template("index.html")
+
+def updateGeneralUsage():
+    while True:
+        cpu = psutil.cpu_percent()
+        ram = psutil.virtual_memory().percent
+
+        gpuDevice:GPUtil.GPUtil.GPU = GPUtil.getGPUs()[0]
+        gpu = gpuDevice.load * 100
+        vram = gpuDevice.memoryUtil * 100 #todo check
+
+        socketio.emit("generalUsage", {"cpu": cpu, "gpu": gpu, "ram": ram, "vram": vram})
+        time.sleep(0.5)
+
+@socketio.on("runCommand")
+@login_required
+def run_command(data):
+    terminal_id = data["id"]
+    threading.Thread(target=run_command_process, args=("echo hola", terminal_id)).start()  # Replace with your real command
+
+@socketio.on("cleanCommand")
+@login_required
+def clean_command(data):
+    terminal_id = data["id"]
+    threading.Thread(target=run_command_process, args=("rm -r build", terminal_id)).start()  # Example clean command
+
+@socketio.on("compileCommand")
+@login_required
+def compile_command(data):
+    terminal_id = data["id"]
+    threading.Thread(target=run_command_process, args=("cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
+
+def run_command_process(command, terminal_id):
+    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    error_detected = False
+
+    for line in process.stdout:
+        socketio.emit("output", {"id": terminal_id, "text": line})
+    for line in process.stderr:
+        error_detected = True
+        socketio.emit("output", {"id": terminal_id, "text": line})
+
+    status = "error" if error_detected else "ok"
+    socketio.emit("finished", {"id": terminal_id, "status": status})
 
 if __name__ == "__main__":
-    assert len(sys.argv) == 2, "Falta el config"
+    threading.Thread(target=updateGeneralUsage, daemon=True).start()
     
-    app = QtWidgets.QApplication([])
-
-    config = loadconfig(sys.argv[1]).astype("string")
-    print(config.to_string())
-
-    widget = MyWidget(config=config)
-    widget.resize(1100, 600)
-    widget.show()
-    
-    app.exec()
-    widget.__del__()
-    
-    sys.exit()
-
-
-
-#     from subprocess import Popen, PIPE
-
-
-# def kill(pid, passwd):
-#     pipe = Popen(['sudo', '-S', 'kill', '-9', str(pid)], 
-#                  stdout=PIPE, 
-#                  stdin=PIPE, 
-#                  stderr=PIPE)
-#     pipe.stdin.write(bytes(passwd + '\n', encoding='utf-8'))
-#     pipe.stdin.flush()
-#     # at this point, the process is killed, return output and errors
-#     return (str(pipe.stdout.read()), str(pipe.stderr.read()))
-
-
-# from __future__ import print_function,unicode_literals
-# import subprocess
-
-# sshProcess = subprocess.Popen(['ssh',
-#                                '-tt'
-#                                <remote client>],
-#                                stdin=subprocess.PIPE, 
-#                                stdout = subprocess.PIPE,
-#                                universal_newlines=True,
-#                                bufsize=0)
-# sshProcess.stdin.write("ls .\n")
-# sshProcess.stdin.write("echo END\n")
-# sshProcess.stdin.write("uptime\n")
-# sshProcess.stdin.write("logout\n")
-# sshProcess.stdin.close()
-
-
-# for line in sshProcess.stdout:
-#     if line == "END\n":
-#         break
-#     print(line,end="")
-
-# #to catch the lines up to logout
-# for line in  sshProcess.stdout: 
-#     print(line,end="")
+    # Habilitar HTTPS (debes tener certificados SSL generados)
+    context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
+    socketio.run(app, debug=True, ssl_context=context)

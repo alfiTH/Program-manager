@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Program Manager</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 0; text-align: center; }
+
+        /* Status bar container */
+        .status-container { display: flex; justify-content: space-around; padding: 20px; gap: 15px; }
+
+        /* Each bar box */
+        .status-box { display: flex; align-items: center; flex-direction: column; width: 25%; }
+
+        /* Bar itself */
+        .bar { height: 20px; width: 100%; background: gray; border-radius: 5px; overflow: hidden; margin-top: 5px; }
+        .progress { height: 100%; text-align: center; color: white; font-size: 14px; line-height: 20px; transition: width 0.5s; }
+
+        /* General consumption meters */
+        .consumption-bar { margin: 10px auto; width: 80%; }
+        .consumption-text { margin-top: 5px; font-weight: bold; }
+
+        /* Terminal grid */
+        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(25%, 1fr)); gap: 10px; padding: 10px; }
+        .terminal-box { background: black; color: green; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; position: relative; }
+
+        /* Resource usage indicators */
+        .info-box { position: absolute; top: 5px; right: 5px; background: rgba(255,255,255,0.2); padding: 5px; font-size: 12px; color: white; }
+
+        /* Button grid in each terminal */
+        .button-container { display: flex; flex-direction: row; gap: 10px; margin-top: 5px; }
+        .button-container button { padding: 5px 15px; font-size: 14px; }
+
+        /* Buttons between GPU and RAM bars */
+        .button-container-vertical { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; align-items: center; }
+    </style>
+</head>
+<body>
+
+    <!-- Global status -->
+    <div class="status-container" id="globalStatus">
+        <!-- CPU -->
+        <div class="status-box">
+            <p id="cpuText" class="consumption-text">CPU: 0%</p>
+            <div class="bar"><div class="progress" id="cpuUsage" style="background: blue;"></div></div>
+        </div>
+
+        <!-- RAM -->
+        <div class="status-box">
+            <p id="ramText" class="consumption-text">RAM: 0%</p>
+            <div class="bar"><div class="progress" id="ramUsage" style="background: green;"></div></div>
+        </div>
+
+        <!-- Button Container between GPU and RAM -->
+        <div class="button-container-vertical">
+            <button onclick="loadConfiguration()">Load Configuration</button>
+            <button onclick="saveConfiguration()">Save Configuration</button>
+            <button onclick="createNewTerminal()">Create Terminal</button>
+        </div>
+
+        <!-- GPU -->
+        <div class="status-box">
+            <p id="gpuText" class="consumption-text">GPU: 0%</p>
+            <div class="bar"><div class="progress" id="gpuUsage" style="background: orange;"></div></div>
+        </div>
+
+        <!-- VRAM -->
+        <div class="status-box">
+            <p id="vramText" class="consumption-text">VRAM: 0%</p>
+            <div class="bar"><div class="progress" id="vramUsage" style="background: purple;"></div></div>
+        </div>
+    </div>
+
+    <!-- Terminal grid -->
+    <div class="grid-container" id="terminals"></div>
+
+    <script>
+        var socket = io();
+        var statuses = {};  // Status of each program
+
+        function updateStatus(id, color) {
+            if (statuses[id]) {
+                statuses[id].style.background = color;
+            }
+        }
+
+        function addTerminal(id) {
+            let div = document.createElement("div");
+            div.className = "terminal-box";
+            div.id = "terminal_" + id;
+            div.innerHTML = `<div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>`;
+            div.innerHTML += `
+                <div class="button-container">
+                    <button onclick="runCommand(${id})">Run</button>
+                    <button onclick="cleanCommand(${id})">Clean</button>
+                    <button onclick="compileCommand(${id})">Compile</button>
+                </div>
+                <div id="terminalOutput_${id}" style="color: white;"></div>
+            `;
+            document.getElementById("terminals").appendChild(div);
+        }
+
+        function updateTerminal(id, text) {
+            let terminal = document.getElementById("terminal_" + id);
+            if (terminal) {
+                terminal.innerHTML += text + "<br>";
+                terminal.scrollTop = terminal.scrollHeight;
+            }
+        }
+
+        function updateGeneralUsage(cpu, gpu, ram, vram) {
+            document.getElementById("cpuUsage").style.width = cpu + "%";
+            document.getElementById("gpuUsage").style.width = gpu + "%";
+            document.getElementById("ramUsage").style.width = ram + "%";
+            document.getElementById("vramUsage").style.width = vram + "%";
+
+            document.getElementById("cpuText").innerText = `CPU: ${cpu}%`;
+            document.getElementById("gpuText").innerText = `GPU: ${gpu}%`;
+            document.getElementById("ramText").innerText = `RAM: ${ram}%`;
+            document.getElementById("vramText").innerText = `VRAM: ${vram}%`;
+        }
+
+        function updateResourceUsage(id, cpu, ram) {
+            let info = document.getElementById("info_" + id);
+            if (info) {
+                info.innerHTML = `CPU: ${cpu}% | RAM: ${ram}%`;
+            }
+        }
+
+        function runCommand(id) {
+            socket.emit("runCommand", { id: id });
+            updateStatus(id, "green");  // Indicate it's running
+        }
+
+        function cleanCommand(id) {
+            socket.emit("cleanCommand", { id: id });
+        }
+
+        function compileCommand(id) {
+            socket.emit("compileCommand", { id: id });
+        }
+
+        // New terminal creation
+        function createNewTerminal() {
+            let newID = Date.now();
+            addTerminal(newID);
+            updateStatus(newID, "green");
+            socket.emit("createTerminal", { id: newID });
+        }
+
+        // Load Configuration
+        function loadConfiguration() {
+            socket.emit("loadConfig");
+        }
+
+        // Save Configuration
+        function saveConfiguration() {
+            socket.emit("saveConfig");
+        }
+
+        socket.on("output", function(data) {
+            updateTerminal(data.id, data.text);
+        });
+
+        socket.on("finished", function(data) {
+            if (data.status === "error") {
+                updateStatus(data.id, "red");
+            } else {
+                updateStatus(data.id, "white");
+            }
+        });
+
+        socket.on("generalUsage", function(data) {
+            updateGeneralUsage(data.cpu, data.gpu, data.ram, data.vram);
+        });
+
+        socket.on("resourceUsage", function(data) {
+            updateResourceUsage(data.id, data.cpu, data.ram);
+        });
+    </script>
+</body>
+</html>
