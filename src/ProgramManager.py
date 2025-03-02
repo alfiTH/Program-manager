@@ -5,7 +5,7 @@
 import psutil
 import subprocess
 import threading
-import time
+from time import sleep
 import os
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, emit
@@ -35,7 +35,6 @@ __status__ = "Prototype"
 #         raise ValueError("Unsupported config file format")
 
 
-
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 
 # Configuración de Flask
@@ -51,9 +50,15 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+terminals: dict[int,subprocess.Popen] = {}
+
 # Base de datos simulada de usuarios
 USERS = load_users()
 
+
+
+
+############################BASIC FLASK###########################3
 class User(UserMixin):
     def __init__(self, username):
         self.id = username
@@ -89,6 +94,9 @@ def logout():
 def index():
     return render_template("index.html")
 
+
+######################HAEDER###########3
+
 def updateGeneralUsage():
     while True:
         cpu = psutil.cpu_percent()
@@ -99,13 +107,23 @@ def updateGeneralUsage():
         vram = gpuDevice.memoryUtil * 100 #todo check
 
         socketio.emit("generalUsage", {"cpu": cpu, "gpu": gpu, "ram": ram, "vram": vram})
-        time.sleep(0.5)
+        sleep(0.5)
+
+
+
+
 
 @socketio.on("runCommand")
 @login_required
 def run_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=("echo hola", terminal_id)).start()  # Replace with your real command
+    threading.Thread(target=run_command_process, args=(f"python3 tmp/hola/src/hola.py", terminal_id)).start()  # Replace with your real command
+
+@socketio.on("stopCommand")
+@login_required
+def stop_command(data):
+    terminal_id = data["id"]
+    threading.Thread(target=stop_command_process, args=(terminal_id,)).start()  # Replace with your real command
 
 @socketio.on("cleanCommand")
 @login_required
@@ -119,18 +137,89 @@ def compile_command(data):
     terminal_id = data["id"]
     threading.Thread(target=run_command_process, args=("cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
 
+
+def stream_output(pipe, terminal_id, mutex, is_error=False):
+    """Lee la salida de un proceso línea por línea en tiempo real y la envía a la terminal."""
+    for line in iter(pipe.readline, ''):
+        with mutex:  # Bloquea para evitar mezclas de salida
+            socketio.emit("output", {"id": terminal_id, "text": line.strip()})
+    pipe.close()
+
+
 def run_command_process(command, terminal_id):
-    process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    error_detected = False
+    process = terminals.get(terminal_id)
 
-    for line in process.stdout:
-        socketio.emit("output", {"id": terminal_id, "text": line})
-    for line in process.stderr:
-        error_detected = True
-        socketio.emit("output", {"id": terminal_id, "text": line})
+    if process is None or process.poll() is not None:
+        
+        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        mutex = threading.Lock() 
+        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
+        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
 
-    status = "error" if error_detected else "ok"
-    socketio.emit("finished", {"id": terminal_id, "status": status})
+        stdout_thread.start()
+        stderr_thread.start()
+
+        terminals[terminal_id] = process
+
+        try:
+            psProcess = psutil.Process(process.pid).children()[0]
+            while process.poll() is None:
+            
+                socketio.emit("resourceUsage", {"id": terminal_id, 
+                                                "cpu": round(psProcess.cpu_percent(interval=2), 5) , 
+                                                "ram":round(psProcess.memory_percent(), 5)})
+        except IndexError:
+            print(f"Error: No child process found for terminal {terminal_id}")
+            return
+        except FileNotFoundError:
+            pass
+        except psutil.NoSuchProcess:
+            pass
+
+        socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0 , "ram":0})
+
+        process.wait()
+        stdout_thread.join()
+        stderr_thread.join()
+    else:
+        print(f"Terminal {terminal_id}, yet in use")
+
+def stop_command_process(terminal_id):
+    process = terminals.get(terminal_id)
+    trys = 0
+    if process is not None:
+        try:
+            psProcess = psutil.Process(process.pid).children()[0]
+        except IndexError:
+            print(f"Error: No child process found for terminal {terminal_id}")
+            return
+        
+        try:
+            while psProcess.is_running():
+                match trys:
+                    case 0:
+                        print("🔹 Intentando SIGINT (2): Interrumpir de forma amigable.😃")
+                        psProcess.send_signal(2) #SIGINT
+                    case 1:
+                        print("🔹 Intentando SIGTERM (15): Solicitar una terminación limpia.🫣")
+                        psProcess.send_signal(15) #SIGTERM
+                    case 2:
+                        print("🔹 Intentando SIGKILL (9): Forzar la terminación.🤬")
+                        psProcess.send_signal(9) #SIGKILL
+                trys+=1
+                sleep(5)
+
+        except psutil.NoSuchProcess:
+            print(f"⚠️ Proceso {terminal_id} ya ha terminado o no existe.")
+            return
+        except psutil.AccessDenied:
+            print(f"⚠️ Acceso denegado al proceso {terminal_id}.")
+            return
+        except Exception as e:
+            print(f"⚠️ Error desconocido al enviar SIGINT: {e}")
+            return
+
+
 
 if __name__ == "__main__":
     threading.Thread(target=updateGeneralUsage, daemon=True).start()

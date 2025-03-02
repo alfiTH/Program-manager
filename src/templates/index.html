@@ -6,35 +6,116 @@
     <title>Program Manager</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 0; text-align: center; }
+        body { 
+            font-family: Arial, sans-serif; 
+            margin: 0; 
+            padding: 0; 
+            text-align: center; 
+        }
 
         /* Status bar container */
-        .status-container { display: flex; justify-content: space-around; padding: 20px; gap: 15px; }
+        .status-container { 
+            display: flex; 
+            justify-content: space-around; 
+            padding: 20px; 
+            gap: 15px; 
+        }
 
         /* Each bar box */
-        .status-box { display: flex; align-items: center; flex-direction: column; width: 25%; }
+        .status-box { 
+            display: flex; 
+            align-items: center; 
+            flex-direction: column; 
+            width: 25%; 
+        }
 
         /* Bar itself */
-        .bar { height: 20px; width: 100%; background: gray; border-radius: 5px; overflow: hidden; margin-top: 5px; }
-        .progress { height: 100%; text-align: center; color: white; font-size: 14px; line-height: 20px; transition: width 0.5s; }
+        .bar { height: 20px; 
+            width: 100%; 
+            background: gray; 
+            border-radius: 5px; 
+            overflow: hidden; 
+            margin-top: 5px; 
+        }
+        .progress { 
+            height: 100%; 
+            text-align: center; 
+            color: white; 
+            font-size: 14px; 
+            line-height: 20px; 
+            transition: width 0.5s; 
+        }
 
         /* General consumption meters */
-        .consumption-bar { margin: 10px auto; width: 80%; }
-        .consumption-text { margin-top: 5px; font-weight: bold; }
+        .consumption-bar { 
+            margin: 10px auto; 
+            width: 80%; 
+        }
+        .consumption-text { 
+            margin-top: 5px; 
+            font-weight: bold; 
+        }
 
         /* Terminal grid */
-        .grid-container { display: grid; grid-template-columns: repeat(auto-fill, minmax(25%, 1fr)); gap: 10px; padding: 10px; }
-        .terminal-box { background: black; color: green; padding: 10px; height: 200px; overflow-y: auto; font-family: monospace; position: relative; }
+        .grid-container { 
+            display: grid; 
+            grid-template-columns: repeat(auto-fill, minmax(25%, 1fr)); 
+            gap: 10px; padding: 10px; 
+        }
 
-        /* Resource usage indicators */
-        .info-box { position: absolute; top: 5px; right: 5px; background: rgba(255,255,255,0.2); padding: 5px; font-size: 12px; color: white; }
+        .terminal-box {
+            background: white;
+            color: black;
+            padding: 10px;
+            height: 200px;
+            padding-top: 40px;
+            font-family: monospace;
+            position: relative;
+        }
+
 
         /* Button grid in each terminal */
-        .button-container { display: flex; flex-direction: row; gap: 10px; margin-top: 5px; }
-        .button-container button { padding: 5px 15px; font-size: 14px; }
+        .button-container {         
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: white;
+            padding: 5px;
+            border-bottom: 1px solid #ddd;}
+
+        /* Resource usage indicators */
+        .info-box {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            background: rgba(255,255,255,0.7);
+            padding: 5px;
+            font-size: 12px;
+            color: black;
+        }
+
+        .terminal-output {
+            max-height: 300px;  
+            overflow-y: auto;   
+            background: white;
+            border: 2px solid #000;  /* Borde de 2px de grosor, color negro */
+            padding: 5px;            /* Espacio interior para que el texto no toque el borde */
+            border-radius: 5px;    
+        }
+
 
         /* Buttons between GPU and RAM bars */
-        .button-container-vertical { display: flex; flex-direction: column; justify-content: space-between; gap: 10px; align-items: center; }
+        .button-container-vertical { 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: space-between; 
+            gap: 10px; 
+            align-items: center; 
+        }
     </style>
 </head>
 <body>
@@ -90,23 +171,28 @@
             let div = document.createElement("div");
             div.className = "terminal-box";
             div.id = "terminal_" + id;
-            div.innerHTML = `<div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>`;
             div.innerHTML += `
                 <div class="button-container">
                     <button onclick="runCommand(${id})">Run</button>
+                    <button onclick="stopCommand(${id})">Stop</button>
                     <button onclick="cleanCommand(${id})">Clean</button>
                     <button onclick="compileCommand(${id})">Compile</button>
                 </div>
-                <div id="terminalOutput_${id}" style="color: white;"></div>
+                <div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>
+                <div id="terminalOutput_${id}" class="terminal-output"></div>
             `;
             document.getElementById("terminals").appendChild(div);
         }
 
         function updateTerminal(id, text) {
-            let terminal = document.getElementById("terminal_" + id);
-            if (terminal) {
-                terminal.innerHTML += text + "<br>";
-                terminal.scrollTop = terminal.scrollHeight;
+            let terminalOutput = document.getElementById("terminalOutput_" + id);
+            if (terminalOutput) {
+                terminalOutput.innerHTML += text + "<br>";
+                const isNearBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 40;
+
+                if (isNearBottom) {
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight; // Mueve el scroll al final
+                }
             }
         }
 
@@ -131,6 +217,11 @@
 
         function runCommand(id) {
             socket.emit("runCommand", { id: id });
+            updateStatus(id, "green");  // Indicate it's running
+        }
+
+        function stopCommand(id) {
+            socket.emit("stopCommand", { id: id });
             updateStatus(id, "green");  // Indicate it's running
         }
 
