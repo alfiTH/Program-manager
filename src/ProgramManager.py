@@ -5,7 +5,10 @@
 import psutil
 import subprocess
 import threading
+import argparse
+from typing import List
 from time import sleep
+from collections import defaultdict
 import os
 from flask import Flask, render_template, request, redirect, url_for, session
 from flask_socketio import SocketIO, emit
@@ -13,6 +16,8 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import check_password_hash
 
 from utils.addUser import load_users
+from utils.ansiParser import ansi_to_html
+from utils.configLoader import loadConfig, saveConfig, TerminalConfiguration
 import GPUtil
 
 
@@ -26,13 +31,6 @@ __maintainer__ = "Alejandro Torrejón Harto"
 __email__ = "atorrejon@unex.es"
 __status__ = "Prototype"
 
-# def loadconfig(filename):
-#     if filename.endswith('.csv'):
-#         return pandas.read_csv(filename, delimiter=";")
-#     elif filename.endswith('.json'):
-#         return pandas.read_json(filename)
-#     else:
-#         raise ValueError("Unsupported config file format")
 
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
@@ -50,12 +48,11 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-terminals: dict[int,subprocess.Popen] = {}
+terminals: dict[int, subprocess.Popen] = {}
+terminalsConfig = defaultdict(TerminalConfiguration)
 
-# Base de datos simulada de usuarios
+
 USERS = load_users()
-
-
 
 
 ############################BASIC FLASK###########################3
@@ -87,12 +84,23 @@ def login():
 @login_required
 def logout():
     logout_user()
+    stop_all_processes()
     return redirect(url_for("login"))
+
+def stop_all_processes():
+    print("Deteniendo todos los procesos...")
+    for id in range(len(terminals)):
+        threading.Thread(target=stop_command_process, args=(id,)).start()
 
 @app.route("/")
 @login_required
 def index():
     return render_template("index.html")
+
+@socketio.on('connect')
+def handle_connect():
+    for id in range(len(terminalsConfig)):
+        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name})
 
 
 ######################HAEDER###########3
@@ -112,12 +120,11 @@ def updateGeneralUsage():
 
 
 
-
 @socketio.on("runCommand")
 @login_required
 def run_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(f"python3 tmp/hola/src/hola.py", terminal_id)).start()  # Replace with your real command
+    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, terminalsConfig[terminal_id].command, terminal_id)).start()  # Replace with your real command
 
 @socketio.on("stopCommand")
 @login_required
@@ -129,29 +136,57 @@ def stop_command(data):
 @login_required
 def clean_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=("rm -r build", terminal_id)).start()  # Example clean command
+    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, "rm -r build", terminal_id)).start()  # Example clean command
 
 @socketio.on("compileCommand")
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=("cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
+    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, "cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
+
+@socketio.on("editDirectory")
+@login_required
+def edit_directory(data):
+    terminalsConfig[data["id"]].directory = data["directory"]
+
+@socketio.on("editCommand")
+@login_required
+def edit_command(data):
+    terminalsConfig[data["id"]].command = data["command"]
+
+@socketio.on("editName")
+@login_required
+def edit_name(data):
+    terminalsConfig[data["id"]].name = data["name"]
+
+@socketio.on("loadConfig")
+@login_required
+def load_config(data):
+    global terminalsConfig
+    terminalsConfig = loadConfig(data["directory"])
+    for id in range(len(terminalsConfig)):
+        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name})
+
+@socketio.on("saveConfig")
+@login_required
+def save_config(data):
+    saveConfig(data["directory"], terminalsConfig)
 
 
 def stream_output(pipe, terminal_id, mutex, is_error=False):
     """Lee la salida de un proceso línea por línea en tiempo real y la envía a la terminal."""
     for line in iter(pipe.readline, ''):
         with mutex:  # Bloquea para evitar mezclas de salida
-            socketio.emit("output", {"id": terminal_id, "text": line.strip()})
+            socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(line.strip())})
     pipe.close()
 
 
-def run_command_process(command, terminal_id):
+def run_command_process(directory, command, terminal_id):
     process = terminals.get(terminal_id)
 
     if process is None or process.poll() is not None:
-        
-        process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {command} on  {directory}\033[0m")})
+        process = subprocess.Popen(command, cwd=directory, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         mutex = threading.Lock() 
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
         stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
@@ -222,8 +257,21 @@ def stop_command_process(terminal_id):
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Programa de gestión de configuraciones.")
+    parser.add_argument(
+        '--config', 
+        type=str, 
+        required=False,
+        help="Ruta del archivo de configuración (CSV o JSON)")
+    arg = parser.parse_args()
+    configPath = arg.config
+    if configPath is not None:
+        terminalsConfig = loadConfig(arg.config)
+
+
+
     threading.Thread(target=updateGeneralUsage, daemon=True).start()
     
     # Habilitar HTTPS (debes tener certificados SSL generados)
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
-    socketio.run(app, debug=True, ssl_context=context)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=True, ssl_context=context)

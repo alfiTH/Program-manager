@@ -63,6 +63,19 @@
             gap: 10px; padding: 10px; 
         }
 
+        .terminal-name {
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .terminal-name-input {
+            font-size: 14px;
+            padding: 5px;
+            width: 100%;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
         .terminal-box {
             background: white;
             color: black;
@@ -99,7 +112,7 @@
         }
 
         .terminal-output {
-            max-height: 300px;  
+            max-height: 100%;  
             overflow-y: auto;   
             background: white;
             border: 2px solid #000;  /* Borde de 2px de grosor, color negro */
@@ -160,6 +173,7 @@
     <script>
         var socket = io();
         var statuses = {};  // Status of each program
+        var counter = 0;
 
         function updateStatus(id, color) {
             if (statuses[id]) {
@@ -167,21 +181,29 @@
             }
         }
 
-        function addTerminal(id) {
-            let div = document.createElement("div");
-            div.className = "terminal-box";
-            div.id = "terminal_" + id;
-            div.innerHTML += `
-                <div class="button-container">
-                    <button onclick="runCommand(${id})">Run</button>
-                    <button onclick="stopCommand(${id})">Stop</button>
-                    <button onclick="cleanCommand(${id})">Clean</button>
-                    <button onclick="compileCommand(${id})">Compile</button>
-                </div>
-                <div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>
-                <div id="terminalOutput_${id}" class="terminal-output"></div>
-            `;
-            document.getElementById("terminals").appendChild(div);
+        function addTerminal(id, name="Unnamed") {
+            if (id==counter){
+                let div = document.createElement("div");
+                div.className = "terminal-box";
+                div.id = "terminal_" + id;
+                div.innerHTML += `
+                    <div id="name${id}" class="terminal-name">
+                        <input type="text" id="nameInput${id}" value="${name}" onblur="editName(${id})" class="terminal-name-input" />
+                    </div>
+                    <div class="button-container">
+                        <button onclick="runCommand(${id})">Run</button>
+                        <button onclick="stopCommand(${id})">Stop</button>
+                        <button onclick="cleanCommand(${id})">Clean</button>
+                        <button onclick="compileCommand(${id})">Compile</button>
+                        <button onclick="editDirectory(${id})">Directory</button>
+                        <button onclick="editCommand(${id})">Command</button>
+                    </div>
+                    <div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>
+                    <div id="terminalOutput_${id}" class="terminal-output"></div>
+                `;
+                document.getElementById("terminals").appendChild(div);
+                counter+=1;
+            }
         }
 
         function updateTerminal(id, text) {
@@ -232,10 +254,31 @@
         function compileCommand(id) {
             socket.emit("compileCommand", { id: id });
         }
+        function editDirectory(id) {
+            const dir = prompt("Introduce el directorio:");
+            if (dir && dir.trim() !== "") {
+                socket.emit("editDirectory", { id: id, directory: dir });
+                updateStatus(id, "green");
+            }
+        }
+        function editCommand(id) {
+            const command = prompt("Introduce el comando a ejecutar:");
+            if (command && command.trim() !== "") {
+                socket.emit("editCommand", { id: id, command: command });
+                updateStatus(id, "green");
+            }
+        }
+        function editName(id) {
+            const newName = document.getElementById(`nameInput${id}`).value;
 
+            socket.emit("editName", {
+            id: id,
+            name: newName
+            });
+        }
         // New terminal creation
         function createNewTerminal() {
-            let newID = Date.now();
+            let newID = counter;
             addTerminal(newID);
             updateStatus(newID, "green");
             socket.emit("createTerminal", { id: newID });
@@ -243,13 +286,27 @@
 
         // Load Configuration
         function loadConfiguration() {
-            socket.emit("loadConfig");
+            const dir = prompt("Introduce el directorio:");
+            if (dir && dir.trim() !== "") {
+                socket.emit("loadConfig", {directory: dir});
+                updateStatus(id, "green");
+            }
         }
 
         // Save Configuration
         function saveConfiguration() {
-            socket.emit("saveConfig");
+        const dir = prompt("Introduce el directorio:");
+            if (dir && dir.trim() !== "") {
+                socket.emit("saveConfig", {directory: dir});
+                updateStatus(id, "green");
+            }
         }
+
+
+        socket.on("newTerminal", function(data) {
+            addTerminal(data.id, data.name);
+        });
+
 
         socket.on("output", function(data) {
             updateTerminal(data.id, data.text);

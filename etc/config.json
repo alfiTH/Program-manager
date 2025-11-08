@@ -1,34 +1,27 @@
 [
     {
-      "Device": "robolab@158.49.247.194",
-      "SSH": "off",
-      "Ping": "on",
-      "Path": "~/Documentos/Alejandro/Program-manager/tmp/Calculadora",
-      "Program": "src/calculator.py",
-      "Config": ""
+      "name": "webots",
+      "directory": ".",
+      "command": "webots"
     },
     {
-      "Device": "robolab@158.49.247.194",
-      "SSH": "off",
-      "Ping": "on",
-      "Path": "~/Documentos/Alejandro/Program-manager/tmp/hola",
-      "Program": "src/hola.py",
-      "Config": ""
+      "name": "rcnode",
+      "directory": ".",
+      "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh"
     },
     {
-      "Device": "robolab@158.49.247.194",
-      "SSH": "off",
-      "Ping": "off",
-      "Path": "~/Documentos/Alejandro/Program-manager/tmp/componente_c",
-      "Program": "bin/Contador",
-      "Config": "hola"
+      "name": "bridge",
+      "directory": "/home/alfith/robocomp/components/webots-bridge",
+      "command": "bin/Webots2Robocomp etc/config"
     },
     {
-      "Device": "robolab@158.49.247.194",
-      "SSH": "off",
-      "Ping": "off",
-      "Path": "~/Documentos/Alejandro/Program-manager/tmp/componente_c",
-      "Program": "bin/Contador",
-      "Config": "hola"
+      "name": "lidar",
+      "directory": "/home/alfith/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
+      "command": "bin/Lidar3D etc/config_helios_webots "
+    },
+    {
+      "name": "viewer",
+      "directory": "/home/alfith/robocomp/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+      "command": "bin/lidar3dviewer etc/config_helios "
     }
   ]
