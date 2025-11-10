@@ -124,7 +124,7 @@ def updateGeneralUsage():
 @login_required
 def run_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, terminalsConfig[terminal_id].command, terminal_id)).start()  # Replace with your real command
+    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && {terminalsConfig[terminal_id].command}", terminal_id)).start()  # Replace with your real command
 
 @socketio.on("stopCommand")
 @login_required
@@ -136,13 +136,13 @@ def stop_command(data):
 @login_required
 def clean_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, "rm -r build", terminal_id)).start()  # Example clean command
+    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && rm -r build", terminal_id)).start()  # Example clean command
 
 @socketio.on("compileCommand")
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].directory, "cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
+    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
 
 @socketio.on("editDirectory")
 @login_required
@@ -158,6 +158,11 @@ def edit_command(data):
 @login_required
 def edit_name(data):
     terminalsConfig[data["id"]].name = data["name"]
+
+@socketio.on("editRestart")
+@login_required
+def edit_restart(data):
+    terminalsConfig[data["id"]].restart = data["restart"]
 
 @socketio.on("loadConfig")
 @login_required
@@ -181,43 +186,61 @@ def stream_output(pipe, terminal_id, mutex, is_error=False):
     pipe.close()
 
 
-def run_command_process(directory, command, terminal_id):
-    process = terminals.get(terminal_id)
+def run_command_process(command, terminal_id):
+    restart_needed = True
+    
+    while restart_needed:
+        restart_needed = False
+        process = terminals.get(terminal_id)
 
-    if process is None or process.poll() is not None:
-        socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {command} on  {directory}\033[0m")})
-        process = subprocess.Popen(command, cwd=directory, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-        mutex = threading.Lock() 
-        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
+        if process is None or process.poll() is not None:
+            socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {command}\033[0m")})
 
-        stdout_thread.start()
-        stderr_thread.start()
+            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            terminals[terminal_id] = process
+            socketio.emit("terminalState", {"id": terminal_id, "status": "running"})
 
-        terminals[terminal_id] = process
+            mutex = threading.Lock() 
+            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
+            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
+            stdout_thread.start()
+            stderr_thread.start()
 
-        try:
-            psProcess = psutil.Process(process.pid).children()[0]
-            while process.poll() is None:
+            ret = None
+            try:
+                psProcess = psutil.Process(process.pid).children(recursive=True)
+                target_process = psProcess[0] if psProcess else psutil.Process(process.pid)
+                
+                while ret is None:
+                    ret = process.poll()
+                    socketio.emit("resourceUsage", {
+                        "id": terminal_id, 
+                        "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
+                        "ram": round(target_process.memory_percent(), 5)
+                    })
             
-                socketio.emit("resourceUsage", {"id": terminal_id, 
-                                                "cpu": round(psProcess.cpu_percent(interval=2), 5) , 
-                                                "ram":round(psProcess.memory_percent(), 5)})
-        except IndexError:
-            print(f"Error: No child process found for terminal {terminal_id}")
-            return
-        except FileNotFoundError:
-            pass
-        except psutil.NoSuchProcess:
-            pass
+            except Exception as e:
+                print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
+                ret = process.poll()
+                
+            finally:
+                socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0, "ram": 0})
+                process.wait()
+                stdout_thread.join()
+                stderr_thread.join()
+                
+                if ret != 0:
+                    if terminalsConfig[terminal_id].restart:
+                        print(f"Terminal {terminal_id} failed with code {ret}. Restarting...")
+                        restart_needed = True
+                    else:
+                        socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
+                else:
+                    socketio.emit("terminalState", {"id": terminal_id, "status": "ok"})
 
-        socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0 , "ram":0})
-
-        process.wait()
-        stdout_thread.join()
-        stderr_thread.join()
-    else:
-        print(f"Terminal {terminal_id}, yet in use")
+        else:
+            print(f"Terminal {terminal_id}, yet in use")
+            restart_needed = False
 
 def stop_command_process(terminal_id):
     process = terminals.get(terminal_id)

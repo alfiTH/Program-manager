@@ -11,13 +11,15 @@ class TerminalConfiguration:
     name: str = "Undefined"
     directory: str = HOME
     command: str = "echo command did not assigned"
+    restart: bool = False
     
     def to_dict(self):
         """Convierte la instancia de TerminalConfiguration a un diccionario."""
         return {
             "name": self.name,
             "directory": self.directory,
-            "command": self.command
+            "command": self.command,
+            "restart": self.restart
         }
 
     @staticmethod
@@ -26,7 +28,8 @@ class TerminalConfiguration:
         return TerminalConfiguration(
             name=data.get("name", "Undefined"),
             directory=data.get("directory", HOME),
-            command=data.get("command", "echo command did not assigned")
+            command=data.get("command", "echo command did not assigned"),
+            restart=data.get("restart", False)
         )
 
 

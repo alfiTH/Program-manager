@@ -60,18 +60,19 @@
         .grid-container { 
             display: grid; 
             grid-template-columns: repeat(auto-fill, minmax(25%, 1fr)); 
+            grid-template-rows: repeat(auto-fill, minmax(25%, 1fr)); 
             gap: 10px; padding: 10px; 
+
         }
 
         .terminal-name {
             font-weight: bold;
-            margin-bottom: 10px;
+            padding: 5px;
         }
 
         .terminal-name-input {
             font-size: 14px;
-            padding: 5px;
-            width: 100%;
+            width: 95%;
             border: 1px solid #ccc;
             border-radius: 4px;
         }
@@ -79,11 +80,27 @@
         .terminal-box {
             background: white;
             color: black;
-            padding: 10px;
-            height: 200px;
-            padding-top: 40px;
+            padding: 5px;
+            height: 300px;
             font-family: monospace;
             position: relative;
+            border: 1px solid #000;
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+
+        }
+
+        .terminal-box.error {
+        background: red;
+        border-color: red !important; /* Borde rojo */
+        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); /* Sombra roja para resaltar */
+        }
+        .terminal-box.running {
+        background: greenyellow;
+        border-color: greenyellow !important; /* Borde rojo */
+        box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); /* Sombra roja para resaltar */
         }
 
 
@@ -91,28 +108,41 @@
         .button-container {         
             display: flex;
             flex-direction: row;
+            flex-wrap: no-wrap;
             gap: 10px;
             position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            background: white;
+            height: 30px;
+            top: 85%;
+            width: 97%;
             padding: 5px;
-            border-bottom: 1px solid #ddd;}
+            background: white;
+            font-size: small;
+            justify-content: space-between;
+            border-radius: 5px;
+
+        }
+        .button-container button {
+            flex-grow: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            padding: 5px; 
+            min-width: 10%;
+            max-width: 80%; 
+            border-radius: 5px;
+            ;
+        }
 
         /* Resource usage indicators */
         .info-box {
-            position: absolute;
-            top: 5px;
-            right: 5px;
+            max-width: 25%;
             background: rgba(255,255,255,0.7);
-            padding: 5px;
-            font-size: 12px;
             color: black;
         }
 
         .terminal-output {
-            max-height: 100%;  
+            max-height: 65%;  
+            top:0%;
+            position: relative;
             overflow-y: auto;   
             background: white;
             border: 2px solid #000;  /* Borde de 2px de grosor, color negro */
@@ -190,6 +220,8 @@
                     <div id="name${id}" class="terminal-name">
                         <input type="text" id="nameInput${id}" value="${name}" onblur="editName(${id})" class="terminal-name-input" />
                     </div>
+                    <div id="terminalOutput_${id}" class="terminal-output"></div>
+                    
                     <div class="button-container">
                         <button onclick="runCommand(${id})">Run</button>
                         <button onclick="stopCommand(${id})">Stop</button>
@@ -197,9 +229,14 @@
                         <button onclick="compileCommand(${id})">Compile</button>
                         <button onclick="editDirectory(${id})">Directory</button>
                         <button onclick="editCommand(${id})">Command</button>
+                        <div>
+                            Restart<br>
+                            <input type="checkbox" id="restartCheckbox_${id}" onchange="toggleRestart(${id})" >
+                        </div>
+                        <div class="info-box" id="info_${id}">CPU: 0%<br>RAM: 0%</div>
+
                     </div>
-                    <div class="info-box" id="info_${id}">CPU: 0% | RAM: 0%</div>
-                    <div id="terminalOutput_${id}" class="terminal-output"></div>
+                    
                 `;
                 document.getElementById("terminals").appendChild(div);
                 counter+=1;
@@ -233,18 +270,16 @@
         function updateResourceUsage(id, cpu, ram) {
             let info = document.getElementById("info_" + id);
             if (info) {
-                info.innerHTML = `CPU: ${cpu}% | RAM: ${ram}%`;
+                info.innerHTML = `CPU: ${cpu}%<br>RAM: ${ram}%`;
             }
         }
 
         function runCommand(id) {
             socket.emit("runCommand", { id: id });
-            updateStatus(id, "green");  // Indicate it's running
         }
 
         function stopCommand(id) {
             socket.emit("stopCommand", { id: id });
-            updateStatus(id, "green");  // Indicate it's running
         }
 
         function cleanCommand(id) {
@@ -258,16 +293,23 @@
             const dir = prompt("Introduce el directorio:");
             if (dir && dir.trim() !== "") {
                 socket.emit("editDirectory", { id: id, directory: dir });
-                updateStatus(id, "green");
             }
         }
         function editCommand(id) {
             const command = prompt("Introduce el comando a ejecutar:");
             if (command && command.trim() !== "") {
                 socket.emit("editCommand", { id: id, command: command });
-                updateStatus(id, "green");
             }
         }
+        function toggleRestart(id) {
+            const checkbox = document.getElementById(`restartCheckbox_${id}`);
+            const isChecked = checkbox.checked;
+            socket.emit("editRestart", { 
+                id: id, 
+                restart: isChecked 
+            });
+        }
+
         function editName(id) {
             const newName = document.getElementById(`nameInput${id}`).value;
 
@@ -280,7 +322,6 @@
         function createNewTerminal() {
             let newID = counter;
             addTerminal(newID);
-            updateStatus(newID, "green");
             socket.emit("createTerminal", { id: newID });
         }
 
@@ -289,7 +330,6 @@
             const dir = prompt("Introduce el directorio:");
             if (dir && dir.trim() !== "") {
                 socket.emit("loadConfig", {directory: dir});
-                updateStatus(id, "green");
             }
         }
 
@@ -298,7 +338,6 @@
         const dir = prompt("Introduce el directorio:");
             if (dir && dir.trim() !== "") {
                 socket.emit("saveConfig", {directory: dir});
-                updateStatus(id, "green");
             }
         }
 
@@ -312,11 +351,32 @@
             updateTerminal(data.id, data.text);
         });
 
-        socket.on("finished", function(data) {
+        socket.on("terminalState", function(data) {
+            // CLAVE: Define terminalBox aqu�, usando el ID del dato
+            const terminalBox = document.getElementById("terminal_" + data.id);
+            
+            // Asegurarse de que el elemento existe antes de manipularlo
+            if (!terminalBox) {
+                console.error("Terminal box not found for ID:", data.id);
+                return;
+            }
+            
+            // El resto de la l�gica permanece igual
             if (data.status === "error") {
-                updateStatus(data.id, "red");
-            } else {
-                updateStatus(data.id, "white");
+                terminalBox.classList.add("error");
+                terminalBox.classList.remove("running");
+            }  
+
+            else {
+                if (data.status === "running") {
+                    terminalBox.classList.add("running");
+                    terminalBox.classList.remove("error");
+
+                } else {
+                    terminalBox.classList.remove("running");
+                    terminalBox.classList.remove("error");
+                    
+                }
             }
         });
 
