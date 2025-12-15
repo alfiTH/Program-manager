@@ -1,0 +1,42 @@
+[
+    {
+        "name": "rcnode",
+        "directory": "/home/robolab",
+        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh"
+    },
+    {
+        "name": "Ricoh",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/camera/ricoh_omni",
+        "command": "bin/RicohOmni etc/config"
+    },
+    {
+        "name": "Helios",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_p3bot"
+    },
+    {
+        "name": "RGBD360",
+        "directory": "$ROBOCOMP/components/robocomp-shadow/insect/RGBD_360",
+        "command": "bin/RGBD_360 etc/config_UR"
+    },
+    {
+        "name": "ZED",
+        "directory": "$ROBOCOMP/components/robocomp-shadow/insect/zed_component",
+        "command": "bin/zed_component etc/configP3bot.toml"
+    },
+    {
+        "name": "Kinova rigth",
+        "directory": "$ROBOCOMP/components/manipulation_kinova_gen3/agents/kinova_controller_cpp",
+        "command": "bin/kinova_controller_cpp etc/config_brazo_pablo"
+    },
+    {
+        "name": "Kinova left",
+        "directory": "$ROBOCOMP/components/manipulation_kinova_gen3/agents/kinova_controller_cpp",
+        "command": "bin/kinova_controller_cpp etc/config_brazo_pedro"
+    },
+    {
+        "name": "ArmControler",
+        "directory": "$ROBOCOMP/components/robocomp-p3bot/components/armController",
+        "command": "bin/armController etc/config_real"
+    }
+]

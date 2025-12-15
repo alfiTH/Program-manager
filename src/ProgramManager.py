@@ -101,6 +101,14 @@ def index():
 def handle_connect():
     for id in range(len(terminalsConfig)):
         socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name})
+        process = terminals.get(id)
+        if process is not None:
+            ret = process.poll()
+            if ret is None:
+                socketio.emit("terminalState", {"id": id, "status": "running"})
+            elif ret != 0:
+                socketio.emit("terminalState", {"id": id, "status": "error"})
+            
 
 
 ######################HAEDER###########3
