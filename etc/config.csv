@@ -1,6 +1,0 @@
-terminal;directory;command
-0;.;webots
-1;.;bash $ROBOCOMP/tools/rcnode/rcnode.sh
-2;/home/alfith/robocomp/components/webots-bridge;bin/Webots2Robocomp etc/config
-3;/home/alfith/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D;bin/Lidar3D etc/config_helios_webots 
-4;/home/alfith/robocomp/components/robocomp-robolab/components/viewers/lidar3d_viewer;bin/lidar3dviewer etc/config_helios 

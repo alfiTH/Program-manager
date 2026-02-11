@@ -1,0 +1,42 @@
+[
+    {
+      "name": "webots",
+      "directory": ".",
+      "command": "webots"
+    },
+    {
+        "name": "rcnode",
+        "directory": ".",
+        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh"
+    },
+    {
+      "name": "bridge",
+      "directory": "$ROBOCOMP/components/webots-p3bot/components/p3bot-bridge",
+      "command": "bin/P3BotBridge etc/config"
+    },
+    {
+        "name": "Ricoh",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/camera/ricoh_omni",
+        "command": "bin/RicohOmni etc/config_wb"
+    },
+    {
+        "name": "Helios",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_P3bot_helios_webots"
+    },
+    {
+        "name": "RGBD360",
+        "directory": "$ROBOCOMP/components/robocomp-shadow/insect/RGBD_360",
+        "command": "bin/RGBD_360 etc/config_wb"
+    },
+    {
+        "name": "ZED",
+        "directory": "$ROBOCOMP/components/robocomp-shadow/insect/zed_component",
+        "command": "bin/zed_component etc/configP3botWebot.toml"
+    },
+    {
+        "name": "ArmControler",
+        "directory": "$ROBOCOMP/components/robocomp-p3bot/components/armController",
+        "command": "bin/armController etc/config"
+    }
+]
