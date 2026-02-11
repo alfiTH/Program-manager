@@ -7,7 +7,7 @@ import subprocess
 import threading
 import argparse
 from typing import List
-from time import sleep
+from time import sleep, time
 from collections import defaultdict
 import os
 from flask import Flask, render_template, request, redirect, url_for, session
@@ -186,11 +186,34 @@ def save_config(data):
     saveConfig(data["directory"], terminalsConfig)
 
 
+# Intervalo de batching en segundos (100ms)
+OUTPUT_BATCH_INTERVAL = 0.1
+# Máximo de líneas por batch para evitar mensajes enormes
+MAX_LINES_PER_BATCH = 900
+
 def stream_output(pipe, terminal_id, mutex, is_error=False):
-    """Lee la salida de un proceso línea por línea en tiempo real y la envía a la terminal."""
+    """Lee la salida de un proceso línea por línea en tiempo real y la envía a la terminal.
+    Usa batching para reducir el número de emits WebSocket."""
+    buffer = []
+    last_flush = time()
+    
     for line in iter(pipe.readline, ''):
-        with mutex:  # Bloquea para evitar mezclas de salida
-            socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(line.strip())})
+        html_line = ansi_to_html(line.strip())
+        with mutex:
+            buffer.append(html_line)
+        
+        now = time()
+        if now - last_flush >= OUTPUT_BATCH_INTERVAL or len(buffer) >= MAX_LINES_PER_BATCH:
+            with mutex:
+                if buffer:
+                    socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
+                    buffer = []
+            last_flush = now
+    
+    # Flush remaining lines
+    with mutex:
+        if buffer:
+            socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
     pipe.close()
 
 
@@ -305,4 +328,4 @@ if __name__ == "__main__":
     
     # Habilitar HTTPS (debes tener certificados SSL generados)
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
-    socketio.run(app, host="0.0.0.0", port=5000, debug=True, ssl_context=context)
+    socketio.run(app, host="0.0.0.0", port=5000, debug=False, ssl_context=context)

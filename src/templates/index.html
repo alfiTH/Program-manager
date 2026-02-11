@@ -204,6 +204,14 @@
         var socket = io();
         var statuses = {};  // Status of each program
         var counter = 0;
+        
+        // === PERFORMANCE CONFIGURATION ===
+        var MAX_TERMINAL_LINES = 1000;  // Máximo de líneas visibles por terminal
+        var terminalLineCounts = {};     // Contador de líneas por terminal
+        
+        // Buffers para agrupar actualizaciones DOM con requestAnimationFrame
+        var pendingUpdates = {};  // {terminalId: [lines...]}
+        var rafScheduled = false;
 
         function updateStatus(id, color) {
             if (statuses[id]) {
@@ -239,20 +247,79 @@
                     
                 `;
                 document.getElementById("terminals").appendChild(div);
+                terminalLineCounts[id] = 0;
                 counter+=1;
             }
         }
 
-        function updateTerminal(id, text) {
-            let terminalOutput = document.getElementById("terminalOutput_" + id);
-            if (terminalOutput) {
-                terminalOutput.innerHTML += text + "<br>";
-                const isNearBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 40;
+        /**
+         * Encola líneas para ser renderizadas en el próximo frame.
+         * Esto agrupa múltiples actualizaciones en una sola operación DOM.
+         */
+        function enqueueTerminalUpdate(id, lines) {
+            if (!pendingUpdates[id]) {
+                pendingUpdates[id] = [];
+            }
+            pendingUpdates[id] = pendingUpdates[id].concat(lines);
+            
+            if (!rafScheduled) {
+                rafScheduled = true;
+                requestAnimationFrame(flushTerminalUpdates);
+            }
+        }
 
+        /**
+         * Renderiza todas las actualizaciones pendientes en un solo frame.
+         * Usa DocumentFragment para minimizar reflows.
+         */
+        function flushTerminalUpdates() {
+            rafScheduled = false;
+            
+            for (var id in pendingUpdates) {
+                var lines = pendingUpdates[id];
+                if (!lines || lines.length === 0) continue;
+                
+                var terminalOutput = document.getElementById("terminalOutput_" + id);
+                if (!terminalOutput) continue;
+                
+                // Detectar si el usuario está cerca del fondo ANTES de añadir
+                var isNearBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 50;
+                
+                // Usar DocumentFragment para insertar todas las líneas de golpe (un solo reflow)
+                var fragment = document.createDocumentFragment();
+                for (var i = 0; i < lines.length; i++) {
+                    var lineDiv = document.createElement("div");
+                    lineDiv.className = "terminal-line";
+                    lineDiv.innerHTML = lines[i];  // Ya viene como HTML desde el backend
+                    fragment.appendChild(lineDiv);
+                }
+                terminalOutput.appendChild(fragment);
+                
+                // Actualizar contador de líneas
+                terminalLineCounts[id] = (terminalLineCounts[id] || 0) + lines.length;
+                
+                // Eliminar líneas antiguas si excede el máximo
+                while (terminalLineCounts[id] > MAX_TERMINAL_LINES) {
+                    var firstChild = terminalOutput.firstChild;
+                    if (firstChild) {
+                        terminalOutput.removeChild(firstChild);
+                        terminalLineCounts[id]--;
+                    } else {
+                        break;
+                    }
+                }
+                
+                // Auto-scroll solo si el usuario estaba cerca del fondo
                 if (isNearBottom) {
-                    terminalOutput.scrollTop = terminalOutput.scrollHeight; // Mueve el scroll al final
+                    terminalOutput.scrollTop = terminalOutput.scrollHeight;
                 }
             }
+            pendingUpdates = {};
+        }
+
+        /** Retrocompatibilidad: actualizar terminal línea por línea */
+        function updateTerminal(id, text) {
+            enqueueTerminalUpdate(id, [text]);
         }
 
         function updateGeneralUsage(cpu, gpu, ram, vram) {
@@ -346,7 +413,12 @@
             addTerminal(data.id, data.name);
         });
 
+        // Handler para batches de output (nuevo, alto rendimiento)
+        socket.on("outputBatch", function(data) {
+            enqueueTerminalUpdate(data.id, data.lines);
+        });
 
+        // Handler legacy para output individual (retrocompatibilidad)
         socket.on("output", function(data) {
             updateTerminal(data.id, data.text);
         });
