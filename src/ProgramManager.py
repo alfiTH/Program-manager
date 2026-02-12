@@ -244,11 +244,15 @@ def run_command_process(command, terminal_id):
                 
                 while ret is None:
                     ret = process.poll()
-                    socketio.emit("resourceUsage", {
-                        "id": terminal_id, 
-                        "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
-                        "ram": round(target_process.memory_percent(), 5)
-                    })
+                    try:
+                        socketio.emit("resourceUsage", {
+                            "id": terminal_id, 
+                            "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
+                            "ram": round(target_process.memory_percent(), 5)
+                        })
+                    except Exception as e:
+                        print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
+                    sleep(0.001)
             
             except Exception as e:
                 print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
@@ -259,8 +263,10 @@ def run_command_process(command, terminal_id):
                 process.wait()
                 stdout_thread.join()
                 stderr_thread.join()
-                
-                if ret != 0:
+
+                if ret is None:
+                    socketio.emit("terminalState", {"id": terminal_id, "status": "warning"})
+                elif ret != 0:
                     if terminalsConfig[terminal_id].restart:
                         print(f"Terminal {terminal_id} failed with code {ret}. Restarting...")
                         restart_needed = True

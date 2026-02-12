@@ -97,10 +97,15 @@
         border-color: red !important; /* Borde rojo */
         box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); /* Sombra roja para resaltar */
         }
+        .terminal-box.warning {
+        background: yellow;
+        border-color: yellow !important; /* Borde rojo */
+        box-shadow: 0 0 10px rgba(255, 255, 0, 0.5); /* Sombra amarilla para resaltar */
+        }
         .terminal-box.running {
         background: greenyellow;
         border-color: greenyellow !important; /* Borde rojo */
-        box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); /* Sombra roja para resaltar */
+        box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); /* Sombra verde para resaltar */
         }
 
 
@@ -434,22 +439,11 @@
             }
             
             // El resto de la l�gica permanece igual
-            if (data.status === "error") {
-                terminalBox.classList.add("error");
-                terminalBox.classList.remove("running");
-            }  
-
-            else {
-                if (data.status === "running") {
-                    terminalBox.classList.add("running");
-                    terminalBox.classList.remove("error");
-
-                } else {
-                    terminalBox.classList.remove("running");
-                    terminalBox.classList.remove("error");
-                    
-                }
-            }
+            terminalBox.classList.remove("running");
+            terminalBox.classList.remove("error");
+            terminalBox.classList.remove("warning");
+            
+            terminalBox.classList.add(data.status);
         });
 
         socket.on("generalUsage", function(data) {
