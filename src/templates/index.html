@@ -239,9 +239,10 @@
                         <button onclick="runCommand(${id})">Run</button>
                         <button onclick="stopCommand(${id})">Stop</button>
                         <button onclick="cleanCommand(${id})">Clean</button>
-                        <button onclick="compileCommand(${id})">Compile</button>
-                        <button onclick="editDirectory(${id})">Directory</button>
-                        <button onclick="editCommand(${id})">Command</button>
+                        <button onclick="compileCommand(${id})">Build</button>
+                        <button onclick="editDirectory(${id})">Dir</button>
+                        <button onclick="editCommand(${id})">Cmd</button>
+                        <button onclick="openCodium(${id})">Code</button>
                         <div>
                             Restart<br>
                             <input type="checkbox" id="restartCheckbox_${id}" onchange="toggleRestart(${id})" >
@@ -373,6 +374,19 @@
                 socket.emit("editCommand", { id: id, command: command });
             }
         }
+
+        function openCodium(id) {
+            fetch(`/get-editor-url?id=${id}`)
+                .then(response => {
+                    if (!response.ok) throw new Error('Error to get URL');
+                    return response.json();
+                })
+                .then(data => {
+                    window.open(data.url, '_blank');
+                })
+                .catch(err => console.error("Error:", err));
+        }
+
         function toggleRestart(id) {
             const checkbox = document.getElementById(`restartCheckbox_${id}`);
             const isChecked = checkbox.checked;
@@ -442,7 +456,7 @@
             terminalBox.classList.remove("running");
             terminalBox.classList.remove("error");
             terminalBox.classList.remove("warning");
-            
+
             terminalBox.classList.add(data.status);
         });
 

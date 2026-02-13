@@ -6,7 +6,6 @@ import psutil
 import subprocess
 import threading
 import argparse
-from typing import List
 from time import sleep, time
 from collections import defaultdict
 import os
@@ -19,7 +18,8 @@ from utils.addUser import load_users
 from utils.ansiParser import ansi_to_html
 from utils.configLoader import loadConfig, saveConfig, TerminalConfiguration
 import GPUtil
-
+import secrets
+import urllib.parse
 
 __author__ = "Alejandro Torrejón Harto"
 __copyright__ = "Copyright 2025, The Program Manager Project"
@@ -34,6 +34,14 @@ __status__ = "Prototype"
 
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+
+CONFIG = {
+    "directory": "$HOME/software/vscodium-server",
+    "bin": "bin/codium-server",
+    "host": "0.0.0.0",
+    "port": "8000",
+    "token": secrets.token_hex(16) # Genera un token aleatorio para esta sesión
+}
 
 # Configuración de Flask
 app = Flask(__name__)
@@ -150,7 +158,7 @@ def clean_command(data):
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && cmake -B build && make -C build -j8", terminal_id)).start()  # Example compile command
+    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && cmake -B build && make -C build -j8", terminal_id, False)).start()  # Example compile command
 
 @socketio.on("editDirectory")
 @login_required
@@ -166,6 +174,18 @@ def edit_command(data):
 @login_required
 def edit_name(data):
     terminalsConfig[data["id"]].name = data["name"]
+
+@app.route('/get-editor-url')
+def get_url():
+    terminal_id = int(request.args.get('id'))
+    raw_directory = terminalsConfig[terminal_id].directory
+
+    decoded_directory = urllib.parse.unquote(raw_directory)
+    final_directory = os.path.expandvars(decoded_directory)
+
+    url = f"http://localhost:{CONFIG['port']}?tkn={CONFIG['token']}&folder={final_directory}"
+
+    return {"url": url}
 
 @socketio.on("editRestart")
 @login_required
@@ -217,7 +237,7 @@ def stream_output(pipe, terminal_id, mutex, is_error=False):
     pipe.close()
 
 
-def run_command_process(command, terminal_id):
+def run_command_process(command, terminal_id, monitoring:bool = True):
     restart_needed = True
     
     while restart_needed:
@@ -237,26 +257,23 @@ def run_command_process(command, terminal_id):
             stdout_thread.start()
             stderr_thread.start()
 
-            ret = None
             try:
                 psProcess = psutil.Process(process.pid).children(recursive=True)
                 target_process = psProcess[0] if psProcess else psutil.Process(process.pid)
-                
-                while ret is None:
-                    ret = process.poll()
-                    try:
-                        socketio.emit("resourceUsage", {
-                            "id": terminal_id, 
-                            "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
+                if monitoring:
+                    while process.poll() is None:
+                        try:
+                            socketio.emit("resourceUsage", {
+                                "id": terminal_id, 
+                                "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
                             "ram": round(target_process.memory_percent(), 5)
                         })
-                    except Exception as e:
-                        print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
-                    sleep(0.001)
+                        except Exception as e:
+                            print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
+                        sleep(0.001)
             
             except Exception as e:
                 print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
-                ret = process.poll()
                 
             finally:
                 socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0, "ram": 0})
@@ -264,12 +281,13 @@ def run_command_process(command, terminal_id):
                 stdout_thread.join()
                 stderr_thread.join()
 
-                if ret is None:
+                if process.poll() is None:
                     socketio.emit("terminalState", {"id": terminal_id, "status": "warning"})
-                elif ret != 0:
+                elif process.poll() != 0:
                     if terminalsConfig[terminal_id].restart:
-                        print(f"Terminal {terminal_id} failed with code {ret}. Restarting...")
+                        print(f"Terminal {terminal_id} failed with code {process.poll()}. Restarting...")
                         restart_needed = True
+                        sleep(1)
                     else:
                         socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
                 else:
@@ -331,7 +349,9 @@ if __name__ == "__main__":
 
 
     threading.Thread(target=updateGeneralUsage, daemon=True).start()
-    
+    subprocess.Popen(f"cd {CONFIG["directory"]} && {CONFIG["bin"]} --host {CONFIG["host"]} --port {CONFIG["port"]} --connection-token {CONFIG["token"]}", 
+                    shell=True)
+
     # Habilitar HTTPS (debes tener certificados SSL generados)
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
     socketio.run(app, host="0.0.0.0", port=5000, debug=False, ssl_context=context)
