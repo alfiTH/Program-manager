@@ -12,7 +12,8 @@
     {
       "name": "bridge",
       "directory": "$ROBOCOMP/components/webots-p3bot/components/p3bot-bridge",
-      "command": "bin/P3BotBridge etc/config"
+      "command": "bin/P3BotBridge etc/config",
+      "restart": true
     },
     {
         "name": "Ricoh",

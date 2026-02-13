@@ -20,6 +20,7 @@ from utils.configLoader import loadConfig, saveConfig, TerminalConfiguration
 import GPUtil
 import secrets
 import urllib.parse
+import re
 
 __author__ = "Alejandro Torrejón Harto"
 __copyright__ = "Copyright 2025, The Program Manager Project"
@@ -108,7 +109,7 @@ def index():
 @socketio.on('connect')
 def handle_connect():
     for id in range(len(terminalsConfig)):
-        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name})
+        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name, "restart":terminalsConfig[id].restart})
         process = terminals.get(id)
         if process is not None:
             ret = process.poll()
@@ -134,13 +135,44 @@ def updateGeneralUsage():
         sleep(0.5)
 
 
+@socketio.on("runAll")
+@login_required
+def run_all():
+    for id in range(len(terminalsConfig)):
+        run_command({"id": id})  # Replace with your real command
 
+@socketio.on("stopAll")
+@login_required
+def stop_all():
+    for id in range(len(terminalsConfig)):
+        stop_command({"id": id})
+
+@socketio.on("cleanAll")
+@login_required
+def clean_all():
+    for id in range(len(terminalsConfig)):
+        clean_command({"id": id})
+
+@socketio.on("compileAll")
+@login_required
+def compile_all():
+    for id in range(len(terminalsConfig)):
+        compile_command({"id": id})
+
+
+subprocess.Popen(args=[
+    CONFIG["bin"], 
+    "--host", CONFIG["host"], 
+    "--port", CONFIG["port"], 
+    "--connection-token", CONFIG["token"]
+],
+cwd=os.path.expandvars(CONFIG["directory"]))
 
 @socketio.on("runCommand")
 @login_required
 def run_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && {terminalsConfig[terminal_id].command}", terminal_id)).start()  # Replace with your real command
+    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].command, terminalsConfig[terminal_id].directory, terminal_id)).start()  # Replace with your real command
 
 @socketio.on("stopCommand")
 @login_required
@@ -152,23 +184,25 @@ def stop_command(data):
 @login_required
 def clean_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && rm -r build", terminal_id)).start()  # Example clean command
+    threading.Thread(target=run_command_process, args=([["rm", "-r", "build"]], terminalsConfig[terminal_id].directory, terminal_id)).start()  # Example clean command
 
 @socketio.on("compileCommand")
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(f"cd {terminalsConfig[terminal_id].directory} && cmake -B build && make -C build -j8", terminal_id, False)).start()  # Example compile command
+    threading.Thread(target=run_command_process, args=([["cmake", "-B", "build"],[ "make", "-C", "build", "-j8"]], terminalsConfig[terminal_id].directory, terminal_id)).start()  # Example compile command
 
 @socketio.on("editDirectory")
 @login_required
 def edit_directory(data):
-    terminalsConfig[data["id"]].directory = data["directory"]
+    terminalsConfig[data["id"]].directory = os.path.expandvars(data["directory"])
 
 @socketio.on("editCommand")
 @login_required
 def edit_command(data):
-    terminalsConfig[data["id"]].command = data["command"]
+    raw_command = os.path.expandvars(data["command"])
+    split_commands = re.split(r'&&|;', raw_command)
+    terminalsConfig[data["id"]].command = [cmd.strip().split() for cmd in split_commands if cmd.strip()]
 
 @socketio.on("editName")
 @login_required
@@ -178,12 +212,14 @@ def edit_name(data):
 @app.route('/get-editor-url')
 def get_url():
     terminal_id = int(request.args.get('id'))
+    server_ip = request.host.split(':')[0]
+
     raw_directory = terminalsConfig[terminal_id].directory
 
     decoded_directory = urllib.parse.unquote(raw_directory)
     final_directory = os.path.expandvars(decoded_directory)
 
-    url = f"http://localhost:{CONFIG['port']}?tkn={CONFIG['token']}&folder={final_directory}"
+    url = f"http://{server_ip}:{CONFIG['port']}?tkn={CONFIG['token']}&folder={final_directory}"
 
     return {"url": url}
 
@@ -197,8 +233,8 @@ def edit_restart(data):
 def load_config(data):
     global terminalsConfig
     terminalsConfig = loadConfig(data["directory"])
-    for id in range(len(terminalsConfig)):
-        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name})
+    handle_connect()
+    socketio.emit("configLoaded", {"status": "success"})
 
 @socketio.on("saveConfig")
 @login_required
@@ -236,98 +272,116 @@ def stream_output(pipe, terminal_id, mutex, is_error=False):
             socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
     pipe.close()
 
+def run_command_process(commands:list[list[str]], cwd:str, terminal_id:int, monitoring:bool = True):
+    for command in commands:
+        restart_needed = True
+        while restart_needed:
+            process = terminals.get(terminal_id)
 
-def run_command_process(command, terminal_id, monitoring:bool = True):
-    restart_needed = True
-    
-    while restart_needed:
-        restart_needed = False
-        process = terminals.get(terminal_id)
+            if process is None or process.poll() is not None:
+                socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {' '.join(command)}\033[0m")})
+                try:
+                    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    terminals[terminal_id] = process
+                except Exception as e:
+                    socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[31mError: {e}\033[0m")})
+                    socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
+                    return
+                socketio.emit("terminalState", {"id": terminal_id, "status": "running"})
 
-        if process is None or process.poll() is not None:
-            socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {command}\033[0m")})
+                mutex = threading.Lock() 
+                stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
+                stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
+                stdout_thread.start()
+                stderr_thread.start()
 
-            process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-            terminals[terminal_id] = process
-            socketio.emit("terminalState", {"id": terminal_id, "status": "running"})
+                try:
+                    if monitoring:
+                        target_process = psutil.Process(process.pid)
+                        tracked_processes = {} 
+                        while process.poll() is None:
+                            total_cpu = 0
+                            total_ram = 0
+                            current_children_pids = []
 
-            mutex = threading.Lock() 
-            stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
-            stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
-            stdout_thread.start()
-            stderr_thread.start()
+                            try:
+                                # 1. Obtener hijos actuales
+                                children = target_process.children(recursive=True)
+                                all_processes = [p for p in children if p.name() == 'cc1plus'] if target_process.name() == "make" else [target_process] + children
 
-            try:
-                psProcess = psutil.Process(process.pid).children(recursive=True)
-                target_process = psProcess[0] if psProcess else psutil.Process(process.pid)
-                if monitoring:
-                    while process.poll() is None:
-                        try:
-                            socketio.emit("resourceUsage", {
-                                "id": terminal_id, 
-                                "cpu": round(target_process.cpu_percent(interval=1), 5), # Reducir intervalo de bloqueo
-                            "ram": round(target_process.memory_percent(), 5)
-                        })
-                        except Exception as e:
-                            print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
-                        sleep(0.001)
-            
-            except Exception as e:
-                print(f"Error during resource monitoring for terminal {terminal_id}: {e}")
-                
-            finally:
-                socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0, "ram": 0})
-                process.wait()
-                stdout_thread.join()
-                stderr_thread.join()
+                                for p in all_processes:
+                                    pid = p.pid
+                                    current_children_pids.append(pid)
+                                    
+                                    # 2. Si es un proceso nuevo, lo guardamos para que empiece a medir
+                                    if pid not in tracked_processes:
+                                        tracked_processes[pid] = p
+                                        # La primera vez llamamos con interval=None para inicializar
+                                        p.cpu_percent(interval=None) 
+                                    
+                                    # 3. Sumamos el uso (ahora sí dará un valor real porque el objeto persiste)
+                                    try:
+                                        total_cpu += tracked_processes[pid].cpu_percent(interval=None)
+                                        total_ram += tracked_processes[pid].memory_percent()
+                                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                                        pass
 
-                if process.poll() is None:
-                    socketio.emit("terminalState", {"id": terminal_id, "status": "warning"})
-                elif process.poll() != 0:
-                    if terminalsConfig[terminal_id].restart:
-                        print(f"Terminal {terminal_id} failed with code {process.poll()}. Restarting...")
-                        restart_needed = True
-                        sleep(1)
+                                # 4. Limpiar procesos que ya terminaron del diccionario para no fugar memoria
+                                pids_to_remove = [pid for pid in tracked_processes if pid not in current_children_pids]
+                                for pid in pids_to_remove:
+                                    del tracked_processes[pid]
+
+                            except Exception as e:
+                                print(f"Error: {e}")
+
+                            # Emitir y dormir (el sleep ahora es global, no por cada proceso)
+                            socketio.emit("resourceUsage", {"id": terminal_id, "cpu": round(total_cpu, 2), "ram": round(total_ram, 2)})
+                            sleep(0.5)
+                    
+                finally:
+                    process.wait()
+                    socketio.emit("resourceUsage", {"id": terminal_id, "cpu": 0, "ram": 0})
+                    stdout_thread.join()
+                    stderr_thread.join()
+
+                    if process.poll() is None:
+                        socketio.emit("terminalState", {"id": terminal_id, "status": "warning"})
+                        return
+                    elif process.poll() != 0:
+                        if terminalsConfig[terminal_id].restart:
+                            print(f"Terminal {terminal_id} failed with code {process.poll()}. Restarting...")
+                            sleep(1)
+                        else:
+                            socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
+                            return
                     else:
-                        socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
-                else:
-                    socketio.emit("terminalState", {"id": terminal_id, "status": "ok"})
+                        socketio.emit("terminalState", {"id": terminal_id, "status": "ok"})
+                        restart_needed = False
 
-        else:
-            print(f"Terminal {terminal_id}, yet in use")
-            restart_needed = False
+            else:
+                print(f"Terminal {terminal_id}, yet in use")
+                return
+
+           
 
 def stop_command_process(terminal_id):
     process = terminals.get(terminal_id)
     trys = 0
     if process is not None:
         try:
-            psProcess = psutil.Process(process.pid).children()[0]
-        except IndexError:
-            print(f"Error: No child process found for terminal {terminal_id}")
-            return
-        
-        try:
-            while psProcess.is_running():
+            while process.poll() is None:
                 match trys:
                     case 0:
                         print("🔹 Intentando SIGINT (2): Interrumpir de forma amigable.😃")
-                        psProcess.send_signal(2) #SIGINT
+                        process.send_signal(2) #SIGINT
                     case 1:
                         print("🔹 Intentando SIGTERM (15): Solicitar una terminación limpia.🫣")
-                        psProcess.send_signal(15) #SIGTERM
+                        process.terminate() #SIGTERM
                     case 2:
                         print("🔹 Intentando SIGKILL (9): Forzar la terminación.🤬")
-                        psProcess.send_signal(9) #SIGKILL
+                        process.kill() #SIGKILL
                 trys+=1
                 sleep(5)
-
-        except psutil.NoSuchProcess:
-            print(f"⚠️ Proceso {terminal_id} ya ha terminado o no existe.")
-            return
-        except psutil.AccessDenied:
-            print(f"⚠️ Acceso denegado al proceso {terminal_id}.")
-            return
         except Exception as e:
             print(f"⚠️ Error desconocido al enviar SIGINT: {e}")
             return
@@ -346,11 +400,16 @@ if __name__ == "__main__":
     if configPath is not None:
         terminalsConfig = loadConfig(arg.config)
 
-
+    print(terminalsConfig)
 
     threading.Thread(target=updateGeneralUsage, daemon=True).start()
-    subprocess.Popen(f"cd {CONFIG["directory"]} && {CONFIG["bin"]} --host {CONFIG["host"]} --port {CONFIG["port"]} --connection-token {CONFIG["token"]}", 
-                    shell=True)
+    subprocess.Popen(args=[
+        CONFIG["bin"],
+        "--host", CONFIG["host"],
+        "--port", CONFIG["port"],
+        "--connection-token", CONFIG["token"]
+    ],
+    cwd=os.path.expandvars(CONFIG["directory"]))
 
     # Habilitar HTTPS (debes tener certificados SSL generados)
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado

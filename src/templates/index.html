@@ -164,6 +164,26 @@
             gap: 10px; 
             align-items: center; 
         }
+
+        .button-container-horizontal { 
+            display: flex; 
+            flex-direction: row; 
+            gap: 10px; /* Separación fija entre botones */
+            width: 100%; /* Asegura que ocupe todo el ancho del status-box */
+            padding:10px; 
+
+        }
+
+        /* Caso 1: Pegados a la izquierda */
+        .align-left { 
+            justify-content: flex-start; 
+        }
+
+        /* Caso 2: Pegados a la derecha */
+        .align-right { 
+            justify-content: flex-end; 
+        }
+
     </style>
 </head>
 <body>
@@ -180,6 +200,10 @@
         <div class="status-box">
             <p id="ramText" class="consumption-text">RAM: 0%</p>
             <div class="bar"><div class="progress" id="ramUsage" style="background: green;"></div></div>
+            <div class="button-container-horizontal align-right">
+                <button onclick="runAll()">Run All</button>
+                <button onclick="stopAll()">Stop All</button>
+            </div>
         </div>
 
         <!-- Button Container between GPU and RAM -->
@@ -193,6 +217,10 @@
         <div class="status-box">
             <p id="gpuText" class="consumption-text">GPU: 0%</p>
             <div class="bar"><div class="progress" id="gpuUsage" style="background: orange;"></div></div>
+            <div class="button-container-horizontal align-left">
+                <button onclick="cleanAll()">Clean All</button>
+                <button onclick="compileAll()">Build All</button>
+            </div>
         </div>
 
         <!-- VRAM -->
@@ -224,8 +252,9 @@
             }
         }
 
-        function addTerminal(id, name="Unnamed") {
+        function addTerminal(id, name="Unnamed", restart=false) {
             if (id==counter){
+                const checkedAttr = restart ? "checked" : "";
                 let div = document.createElement("div");
                 div.className = "terminal-box";
                 div.id = "terminal_" + id;
@@ -245,7 +274,7 @@
                         <button onclick="openCodium(${id})">Code</button>
                         <div>
                             Restart<br>
-                            <input type="checkbox" id="restartCheckbox_${id}" onchange="toggleRestart(${id})" >
+                            <input type="checkbox" id="restartCheckbox_${id}" onchange="toggleRestart(${id})" ${checkedAttr}>
                         </div>
                         <div class="info-box" id="info_${id}">CPU: 0%<br>RAM: 0%</div>
 
@@ -347,6 +376,22 @@
             }
         }
 
+        function runAll() {
+            socket.emit("runAll");
+        }
+
+        function stopAll() {
+            socket.emit("stopAll");
+        }
+
+        function cleanAll() {
+            socket.emit("cleanAll");
+        }
+
+        function compileAll() {
+            socket.emit("compileAll");
+        }
+
         function runCommand(id) {
             socket.emit("runCommand", { id: id });
         }
@@ -419,6 +464,12 @@
             }
         }
 
+        socket.on("configLoaded", function(data) {
+            if (data.status === "success") {
+                window.location.reload();
+            }
+        });
+
         // Save Configuration
         function saveConfiguration() {
         const dir = prompt("Introduce el directorio:");
@@ -429,7 +480,7 @@
 
 
         socket.on("newTerminal", function(data) {
-            addTerminal(data.id, data.name);
+            addTerminal(data.id, data.name, data.restart);
         });
 
         // Handler para batches de output (nuevo, alto rendimiento)

@@ -3,6 +3,7 @@ import os
 from dataclasses import dataclass
 from typing import List
 from collections import defaultdict
+import re
 
 HOME = os.environ['HOME']
 
@@ -40,6 +41,13 @@ def loadConfig(filename: str) -> defaultdict[int, TerminalConfiguration]:
         with open(filename, 'r') as f:
             config = json.load(f)
             for idx, terminal_data in enumerate(config):
+                if 'directory' in terminal_data:
+                    terminal_data['directory'] = os.path.expandvars(terminal_data['directory'])
+                
+                if 'command' in terminal_data:
+                    raw_command = os.path.expandvars(terminal_data["command"])
+                    split_commands = re.split(r'&&|;', raw_command)
+                    terminal_data['command'] = [cmd.strip().split() for cmd in split_commands if cmd.strip()]
                 terminalsConfig[idx] = TerminalConfiguration.from_dict(terminal_data)
     else:
         raise ValueError("Unsupported config file format")
