@@ -39,5 +39,25 @@
         "name": "ArmControler",
         "directory": "$ROBOCOMP/components/robocomp-p3bot/components/armController",
         "command": "bin/armController etc/config"
+    },
+    {
+        "name": "ALVR",
+        "directory": "$HOME/software/alvr_launcher_linux",
+        "command": "./ALVR_Launcher"
+    },
+    {
+        "name": "Unreal",
+        "directory": "$HOME/Code/VR_teleoperation/CustomLibs",
+        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Binaries/Linux/UnrealEditor $HOME/Code/VR_teleoperation/VRTeleoperation.uproject"
+    },
+    {
+        "name": "Test Unreal",
+        "directory": "$HOME/Code/VR_teleoperation/CustomLibs/test",
+        "command": "build/RobotMiddlewareTests"
+    },
+    {
+        "name": "Compile Unreal",
+        "directory": ".",
+        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Build/BatchFiles/Linux/Build.sh VRTeleoperationEditor Linux Development $HOME/Code/VR_teleoperation/VRTeleoperation.uproject"
     }
 ]
