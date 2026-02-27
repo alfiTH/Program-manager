@@ -11,7 +11,7 @@ HOME = os.environ['HOME']
 class TerminalConfiguration:
     name: str = "Undefined"
     directory: str = HOME
-    command: str = "echo command did not assigned"
+    command: List[List[str]] = (("echo", "command did not assigned"),)
     restart: bool = False
     
     def to_dict(self):
@@ -29,7 +29,7 @@ class TerminalConfiguration:
         return TerminalConfiguration(
             name=data.get("name", "Undefined"),
             directory=data.get("directory", HOME),
-            command=data.get("command", "echo command did not assigned"),
+            command=data.get("command", [["echo", "command did not assigned"],]),
             restart=data.get("restart", False)
         )
 
