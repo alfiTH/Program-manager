@@ -39,10 +39,16 @@ os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
 CONFIG = {
     "directory": "$HOME/software/vscodium-server",
     "bin": "bin/codium-server",
-    "host": "0.0.0.0",
-    "port": "8000",
     "token": secrets.token_hex(16) # Genera un token aleatorio para esta sesión
 }
+
+GREEN = "\033[0;32m"
+RED = "\033[0;31m"
+YELLOW = "\033[0;33m"
+BLUE = "\033[0;34m"
+MAGENTA = "\033[0;35m"
+CYAN = "\033[0;36m"
+RESET = "\033[0m"
 
 # Configuración de Flask
 app = Flask(__name__)
@@ -159,15 +165,6 @@ def compile_all():
     for id in range(len(terminalsConfig)):
         compile_command({"id": id})
 
-
-subprocess.Popen(args=[
-    CONFIG["bin"], 
-    "--host", CONFIG["host"], 
-    "--port", CONFIG["port"], 
-    "--connection-token", CONFIG["token"]
-],
-cwd=os.path.expandvars(CONFIG["directory"]))
-
 @socketio.on("runCommand")
 @login_required
 def run_command(data):
@@ -219,7 +216,7 @@ def get_url():
     decoded_directory = urllib.parse.unquote(raw_directory)
     final_directory = os.path.expandvars(decoded_directory)
 
-    url = f"http://{server_ip}:{CONFIG['port']}?tkn={CONFIG['token']}&folder={final_directory}"
+    url = f"http://{server_ip}:{arg.codium_port}?tkn={CONFIG['token']}&folder={final_directory}"
 
     return {"url": url}
 
@@ -395,22 +392,42 @@ if __name__ == "__main__":
         type=str, 
         required=False,
         help="Ruta del archivo de configuración (CSV o JSON)")
+    parser.add_argument(
+        '--port', 
+        type=int, 
+        default=5000,
+        required=False,
+        help="Puerto del servidor")
+    parser.add_argument(
+        '--codium-port', 
+        type=str, 
+        default="8000",
+        required=False,
+        help="Puerto del servidor")
+    parser.add_argument(
+        '--host', 
+        type=str, 
+        default="0.0.0.0",
+        required=False,
+        help="Host del servidor")
     arg = parser.parse_args()
+
     configPath = arg.config
     if configPath is not None:
         terminalsConfig = loadConfig(arg.config)
 
-    print(terminalsConfig)
-
+    # print(terminalsConfig)
     threading.Thread(target=updateGeneralUsage, daemon=True).start()
     subprocess.Popen(args=[
-        CONFIG["bin"],
-        "--host", CONFIG["host"],
-        "--port", CONFIG["port"],
-        "--connection-token", CONFIG["token"]
-    ],
-    cwd=os.path.expandvars(CONFIG["directory"]))
+                        CONFIG["bin"],
+                        "--host", arg.host,
+                        "--port", arg.codium_port,
+                        "--connection-token", CONFIG["token"]],
+                    cwd=os.path.expandvars(CONFIG["directory"]),
+                    stdout=subprocess.DEVNULL)
 
+    print(f"\n{GREEN}Launch Codium on port {RED}{arg.codium_port}{GREEN} with token {RED}{CONFIG['token']}{RESET}")
     # Habilitar HTTPS (debes tener certificados SSL generados)
+    print(f"{GREEN}Launch Program Manager on port {RED}{arg.port}{RESET}\n")
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
-    socketio.run(app, host="0.0.0.0", port=5000, debug=False, ssl_context=context)
+    socketio.run(app, host=arg.host, port=arg.port, debug=False, ssl_context=context)
