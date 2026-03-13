@@ -21,6 +21,8 @@ import GPUtil
 import secrets
 import urllib.parse
 import re
+import pty
+import select
 
 __author__ = "Alejandro Torrejón Harto"
 __copyright__ = "Copyright 2025, The Program Manager Project"
@@ -126,7 +128,7 @@ def handle_connect():
             
 
 
-######################HAEDER###########3
+######################HAEDER###########
 
 def updateGeneralUsage():
     while True:
@@ -145,7 +147,7 @@ def updateGeneralUsage():
 @login_required
 def run_all():
     for id in range(len(terminalsConfig)):
-        run_command({"id": id})  # Replace with your real command
+        run_command({"id": id})
 
 @socketio.on("stopAll")
 @login_required
@@ -169,25 +171,27 @@ def compile_all():
 @login_required
 def run_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].command, terminalsConfig[terminal_id].directory, terminal_id)).start()  # Replace with your real command
+    threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].command, terminalsConfig[terminal_id].directory, terminal_id)).start()
 
 @socketio.on("stopCommand")
 @login_required
 def stop_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=stop_command_process, args=(terminal_id,)).start()  # Replace with your real command
+    threading.Thread(target=stop_command_process, args=(terminal_id,)).start()
 
 @socketio.on("cleanCommand")
 @login_required
 def clean_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=([["rm", "-r", "build"]], terminalsConfig[terminal_id].directory, terminal_id)).start()  # Example clean command
+    threading.Thread(target=run_command_process, args=([["rm", "-r", "build"]], terminalsConfig[terminal_id].directory, terminal_id)).start()
 
 @socketio.on("compileCommand")
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=([["cmake", "-B", "build"],[ "make", "-C", "build", "-j8"]], terminalsConfig[terminal_id].directory, terminal_id)).start()  # Example compile command
+    threading.Thread(target=run_command_process, args=([["cmake", "-B", "build"], 
+                                                        ["make", "-C", "build", "-j8"]], 
+                                                        terminalsConfig[terminal_id].directory, terminal_id)).start()
 
 @socketio.on("editDirectory")
 @login_required
@@ -250,36 +254,72 @@ def stream_output(pipe, terminal_id, mutex, is_error=False):
     buffer = []
     last_flush = time()
     
-    for line in iter(pipe.readline, ''):
-        html_line = ansi_to_html(line.strip())
-        with mutex:
-            buffer.append(html_line)
-        
-        now = time()
-        if now - last_flush >= OUTPUT_BATCH_INTERVAL or len(buffer) >= MAX_LINES_PER_BATCH:
-            with mutex:
-                if buffer:
+    # Ponemos el descriptor en modo no bloqueante
+    os.set_blocking(master_fd, False)
+
+    try:
+        while True:
+            # Esperamos datos (timeout de 0.1s para permitir el flush por tiempo)
+            r, _, _ = select.select([master_fd], [], [], 0.1)
+            
+            if r:
+                try:
+                    raw_bytes = os.read(master_fd, 8192)
+                    if not raw_bytes:
+                        break
+                    
+                    # Decodificamos. Importante: NO usamos splitlines aquí
+                    # para no perder los \r ni los \n
+                    text_chunk = raw_bytes.decode('utf-8', errors='ignore')
+                    
+                    # Pasamos el trozo entero al parser ANSI
+                    # Tu ansi_to_html debería devolver el HTML manteniendo los \r y \n
+                    html_piece = ansi_to_html(text_chunk)
+                    
+                    with mutex:
+                        buffer.append(html_piece)
+                
+                except (OSError, UnicodeDecodeError):
+                    break
+
+            # Lógica de Batching
+            now = time()
+            if buffer and (now - last_flush >= OUTPUT_BATCH_INTERVAL or len(buffer) >= MAX_LINES_PER_BATCH):
+                with mutex:
+                    # Enviamos el batch. En el frontend deberías concatenar estos strings.
                     socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
                     buffer = []
-            last_flush = now
-    
-    # Flush remaining lines
-    with mutex:
-        if buffer:
-            socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
-    pipe.close()
+                last_flush = now
+    finally:
+        # Antes de cerrar, enviamos lo que haya quedado en el buffer
+        with mutex:
+            if buffer:
+                socketio.emit("outputBatch", {"id": terminal_id, "lines": buffer})
+                buffer = []
+            
+            try:
+                os.close(master_fd)
+            except OSError:
+                pass
 
 def run_command_process(commands:list[list[str]], cwd:str, terminal_id:int, monitoring:bool = True):
     for command in commands:
         restart_needed = True
         while restart_needed:
             process = terminals.get(terminal_id)
+            masterOut_fd, slaveOut_fd = pty.openpty()
+            masterErr_fd, slaveErr_fd = pty.openpty()
 
             if process is None or process.poll() is not None:
                 socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[32mRun {' '.join(command)}\033[0m")})
                 try:
-                    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                    process = subprocess.Popen(command, cwd=cwd, stdout=slaveOut_fd, stderr=slaveErr_fd, text=True, 
+                                                env={**os.environ.copy(), "FORCE_COLOR": "true", "TERM": "xterm-256color"}, 
+                                                bufsize=1)
                     terminals[terminal_id] = process
+                    os.close(slaveOut_fd)
+                    os.close(slaveErr_fd)
+
                 except Exception as e:
                     socketio.emit("output", {"id": terminal_id, "text": ansi_to_html(f"\033[31mError: {e}\033[0m")})
                     socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
@@ -287,8 +327,8 @@ def run_command_process(commands:list[list[str]], cwd:str, terminal_id:int, moni
                 socketio.emit("terminalState", {"id": terminal_id, "status": "running"})
 
                 mutex = threading.Lock() 
-                stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, terminal_id, mutex, False))
-                stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, terminal_id, mutex, True))
+                stdout_thread = threading.Thread(target=stream_output, args=(masterOut_fd, terminal_id, mutex, False))
+                stderr_thread = threading.Thread(target=stream_output, args=(masterErr_fd, terminal_id, mutex, True))
                 stdout_thread.start()
                 stderr_thread.start()
 
@@ -407,9 +447,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--host', 
         type=str, 
-        default="0.0.0.0",
+        default="localhost",
         required=False,
-        help="Host del servidor")
+        help="Host del servidor (si quiere acceso remoto use 0.0.0.0)")
     arg = parser.parse_args()
 
     configPath = arg.config
