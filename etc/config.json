@@ -11,17 +11,27 @@
     },
     {
       "name": "bridge",
-      "directory": "/home/alfith/robocomp/components/webots-bridge",
+      "directory": "$ROBOCOMP/components/webots-bridge",
       "command": "bin/Webots2Robocomp etc/config"
     },
     {
-      "name": "lidar",
-      "directory": "/home/alfith/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
-      "command": "bin/Lidar3D etc/config_helios_webots "
+      "name": "Helios",
+      "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+      "command": "bin/Lidar3D etc/config_helios_webots"
     },
     {
-      "name": "viewer",
-      "directory": "/home/alfith/robocomp/components/robocomp-robolab/components/viewers/lidar3d_viewer",
-      "command": "bin/lidar3dviewer etc/config_helios "
+      "name": "bpearl",
+      "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+      "command": "bin/Lidar3D etc/config_pearl_webots"
+    },
+    {
+      "name": "viewer_helios",
+      "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+      "command": "bin/lidar3dviewer etc/config_helios"
+    },
+    {
+      "name": "viewer_bpearl",
+      "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+      "command": "bin/lidar3dviewer etc/config_pearl"
     }
   ]

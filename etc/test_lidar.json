@@ -1,0 +1,51 @@
+[
+    {
+        "name": "webots",
+        "directory": ".",
+        "command": "webots",
+        "restart": false,
+        "buildable": true
+    },
+    {
+        "name": "rcnode",
+        "directory": ".",
+        "command": "bash /home/robolab/robocomp/tools/rcnode/rcnode.sh",
+        "restart": false,
+        "buildable": true
+    },
+    {
+        "name": "bridge",
+        "directory": "/home/robolab/robocomp/components/webots-bridge",
+        "command": "bin/Webots2Robocomp etc/config",
+        "restart": true,
+        "buildable": true
+    },
+    {
+        "name": "Helios",
+        "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_helios_webots",
+        "restart": false,
+        "buildable": true
+    },
+    {
+        "name": "bpearl",
+        "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_pearl_webots",
+        "restart": false,
+        "buildable": true
+    },
+    {
+        "name": "filter",
+        "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3DFilter",
+        "command": "bin/lidar3DFilter etc/config",
+        "restart": false,
+        "buildable": true
+    },
+    {
+        "name": "viewer",
+        "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+        "command": "bin/lidar3dviewer etc/config_filtered",
+        "restart": false,
+        "buildable": true
+    }
+]

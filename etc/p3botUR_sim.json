@@ -2,12 +2,14 @@
     {
       "name": "webots",
       "directory": ".",
-      "command": "webots"
+      "command": "webots",
+      "buildable": false
     },
     {
         "name": "rcnode",
         "directory": ".",
-        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh"
+        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh",
+        "buildable": false
     },
     {
       "name": "bridge",
@@ -41,9 +43,15 @@
         "command": "bin/armController etc/config"
     },
     {
+        "name": "slamo",
+        "directory": "$ROBOCOMP/components/beta-robotica-class/ainf_slamo",
+        "command": "bin/ainf_slamo etc/config"
+    },
+    {
         "name": "ALVR",
         "directory": "$HOME/software/alvr_launcher_linux",
-        "command": "./ALVR_Launcher"
+        "command": "./ALVR_Launcher",
+        "buildable": false
     },
     {
         "name": "Unreal",
@@ -58,6 +66,7 @@
     {
         "name": "Compile Unreal",
         "directory": ".",
-        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Build/BatchFiles/Linux/Build.sh VRTeleoperationEditor Linux Development $HOME/Code/VR_teleoperation/VRTeleoperation.uproject"
+        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Build/BatchFiles/Linux/Build.sh VRTeleoperationEditor Linux Development $HOME/Code/VR_teleoperation/VRTeleoperation.uproject",
+        "buildable": false
     }
 ]
