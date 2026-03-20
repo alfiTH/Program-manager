@@ -189,7 +189,8 @@ def clean_command(data):
 @login_required
 def compile_command(data):
     terminal_id = data["id"]
-    threading.Thread(target=run_command_process, args=([["cmake", "-B", "build"], 
+    if terminalsConfig[terminal_id].buildable:
+        threading.Thread(target=run_command_process, args=([["cmake", "-B", "build"], 
                                                         ["make", "-C", "build", "-j8"]], 
                                                         terminalsConfig[terminal_id].directory, terminal_id)).start()
 
@@ -248,7 +249,7 @@ OUTPUT_BATCH_INTERVAL = 0.1
 # Máximo de líneas por batch para evitar mensajes enormes
 MAX_LINES_PER_BATCH = 900
 
-def stream_output(pipe, terminal_id, mutex, is_error=False):
+def stream_output(master_fd, terminal_id, mutex, is_error=False):
     """Lee la salida de un proceso línea por línea en tiempo real y la envía a la terminal.
     Usa batching para reducir el número de emits WebSocket."""
     buffer = []
@@ -467,6 +468,7 @@ if __name__ == "__main__":
                     stdout=subprocess.DEVNULL)
 
     print(f"\n{GREEN}Launch Codium on port {RED}{arg.codium_port}{GREEN} with token {RED}{CONFIG['token']}{RESET}")
+    
     # Habilitar HTTPS (debes tener certificados SSL generados)
     print(f"{GREEN}Launch Program Manager on port {RED}{arg.port}{RESET}\n")
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
