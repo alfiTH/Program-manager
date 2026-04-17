@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import List
 from collections import defaultdict
 import re
+import uuid
 
 HOME = os.environ['HOME']
 
@@ -37,13 +38,13 @@ class TerminalConfiguration:
         )
 
 
-def loadConfig(filename: str) -> defaultdict[int, TerminalConfiguration]:
+def loadConfig(filename: str) -> defaultdict[str, TerminalConfiguration]:
     """Carga la configuración desde un archivo JSON o CSV."""
     terminalsConfig = defaultdict(TerminalConfiguration)
     if filename.endswith('.json'):
         with open(filename, 'r') as f:
             config = json.load(f)
-            for idx, terminal_data in enumerate(config):
+            for terminal_data in config:
                 if 'directory' in terminal_data:
                     terminal_data['directory'] = os.path.expandvars(terminal_data['directory'])
                 
@@ -51,13 +52,13 @@ def loadConfig(filename: str) -> defaultdict[int, TerminalConfiguration]:
                     raw_command = os.path.expandvars(terminal_data["command"])
                     split_commands = re.split(r'&&|;', raw_command)
                     terminal_data['command'] = [cmd.strip().split() for cmd in split_commands if cmd.strip()]
-                terminalsConfig[idx] = TerminalConfiguration.from_dict(terminal_data)
+                terminalsConfig[str(uuid.uuid4())] = TerminalConfiguration.from_dict(terminal_data)
     else:
         raise ValueError("Unsupported config file format")
     return terminalsConfig
 
 
-def saveConfig(filename: str, terminalsConfig: defaultdict[int, TerminalConfiguration]):
+def saveConfig(filename: str, terminalsConfig: defaultdict[str, TerminalConfiguration]):
     """Guarda las configuraciones en un archivo JSON."""
     data = []
     

@@ -15,7 +15,7 @@ def load_users(user_file="users.json"):
     except FileNotFoundError:
         return {}
 
-if __name__ == "__main__":
+def add_user():
     print("Presiona CTRL+C para salir.\n")
     
     users = load_users()
@@ -43,3 +43,6 @@ if __name__ == "__main__":
         except KeyboardInterrupt:
             print("\nSaliendo...")
             break
+
+if __name__ == "__main__":
+    add_user()

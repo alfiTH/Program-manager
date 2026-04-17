@@ -23,6 +23,7 @@ import urllib.parse
 import re
 import pty
 import select
+import uuid
 
 __author__ = "Alejandro Torrejón Harto"
 __copyright__ = "Copyright 2025, The Program Manager Project"
@@ -65,7 +66,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
-terminals: dict[int, subprocess.Popen] = {}
+terminals: dict[str, subprocess.Popen] = {}
 terminalsConfig = defaultdict(TerminalConfiguration)
 
 
@@ -94,20 +95,15 @@ def login():
             login_user(User(username))
             return redirect(url_for("index"))
         
-        return "Error: Nombre de usuario o contraseña incorrectos."
+        return "Error: Incorrect username or password."
     return render_template("login.html")
 
 @app.route("/logout")
 @login_required
 def logout():
     logout_user()
-    stop_all_processes()
+    stop_all()
     return redirect(url_for("login"))
-
-def stop_all_processes():
-    print("Deteniendo todos los procesos...")
-    for id in range(len(terminals)):
-        threading.Thread(target=stop_command_process, args=(id,)).start()
 
 @app.route("/")
 @login_required
@@ -116,8 +112,11 @@ def index():
 
 @socketio.on('connect')
 def handle_connect():
-    for id in range(len(terminalsConfig)):
-        socketio.emit("newTerminal", {"id":id, "name":terminalsConfig[id].name, "restart":terminalsConfig[id].restart})
+    for id, config in terminalsConfig.items():
+        socketio.emit("newTerminal", {
+            "id": id,
+            "name": config.name
+        })
         process = terminals.get(id)
         if process is not None:
             ret = process.poll()
@@ -146,31 +145,43 @@ def updateGeneralUsage():
 @socketio.on("runAll")
 @login_required
 def run_all():
-    for id in range(len(terminalsConfig)):
+    for id in terminalsConfig.keys():
         run_command({"id": id})
 
 @socketio.on("stopAll")
 @login_required
 def stop_all():
-    for id in range(len(terminalsConfig)):
+    for id in terminalsConfig.keys():
         stop_command({"id": id})
 
 @socketio.on("cleanAll")
 @login_required
 def clean_all():
-    for id in range(len(terminalsConfig)):
+    for id in terminalsConfig.keys():
         clean_command({"id": id})
 
 @socketio.on("compileAll")
 @login_required
 def compile_all():
-    for id in range(len(terminalsConfig)):
+    for id in terminalsConfig.keys():
         compile_command({"id": id})
+
+@socketio.on("createTerminal")
+@login_required
+def create_terminal():
+    id = str(uuid.uuid4())
+    terminalsConfig[id] = TerminalConfiguration()
+    socketio.emit("newTerminal", {
+        "id": id,
+        "name": terminalsConfig[id].name
+    })
 
 @socketio.on("runCommand")
 @login_required
 def run_command(data):
     terminal_id = data["id"]
+    print(terminal_id)
+
     threading.Thread(target=run_command_process, args=(terminalsConfig[terminal_id].command, terminalsConfig[terminal_id].directory, terminal_id)).start()
 
 @socketio.on("stopCommand")
@@ -213,7 +224,7 @@ def edit_name(data):
 
 @app.route('/get-editor-url')
 def get_url():
-    terminal_id = int(request.args.get('id'))
+    terminal_id = request.args.get('id')
     server_ip = request.host.split(':')[0]
 
     raw_directory = terminalsConfig[terminal_id].directory
@@ -230,6 +241,24 @@ def get_url():
 def edit_restart(data):
     terminalsConfig[data["id"]].restart = data["restart"]
 
+@socketio.on("editBuildable")
+@login_required
+def edit_buildable(data):
+    terminalsConfig[data["id"]].buildable = data["buildable"]
+
+@socketio.on("deleteTerminal")
+@login_required
+def delete_terminal(data):
+    terminal_id = data["id"]
+    # Detener proceso si está corriendo
+    if terminal_id in terminals:
+        stop_command_process(terminal_id)
+        del terminals[terminal_id]
+    # Eliminar configuración
+    if terminal_id in terminalsConfig:
+        del terminalsConfig[terminal_id]
+    socketio.emit("terminalDeleted", {"id": terminal_id})
+
 @socketio.on("loadConfig")
 @login_required
 def load_config(data):
@@ -242,6 +271,23 @@ def load_config(data):
 @login_required
 def save_config(data):
     saveConfig(data["directory"], terminalsConfig)
+
+
+@app.route('/get-terminal-config')
+@login_required
+def get_terminal_config():
+    terminal_id = request.args.get('id')
+    if terminal_id in terminalsConfig:
+        config = terminalsConfig[terminal_id]
+        command_str = " ".join(" ".join(cmd) for cmd in config.command)
+        return {
+            "name": config.name,
+            "directory": config.directory,
+            "command": command_str,
+            "restart": config.restart,
+            "buildable": config.buildable
+        }
+    return {"error": "Terminal not found"}, 404
 
 
 # Intervalo de batching en segundos (100ms)
@@ -410,13 +456,13 @@ def stop_command_process(terminal_id):
             while process.poll() is None:
                 match trys:
                     case 0:
-                        print("🔹 Intentando SIGINT (2): Interrumpir de forma amigable.😃")
+                        print("🔹 Trying SIGINT (2): Gracefully interrupt process.😃")
                         process.send_signal(2) #SIGINT
                     case 1:
-                        print("🔹 Intentando SIGTERM (15): Solicitar una terminación limpia.🫣")
+                        print("🔹 Trying SIGTERM (15): Request a clean termination.🫣")
                         process.terminate() #SIGTERM
                     case 2:
-                        print("🔹 Intentando SIGKILL (9): Forzar la terminación.🤬")
+                        print("🔹 Trying SIGKILL (9): Force termination.🤬")
                         process.kill() #SIGKILL
                 trys+=1
                 sleep(5)
@@ -429,29 +475,42 @@ def stop_command_process(terminal_id):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Programa de gestión de configuraciones.")
     parser.add_argument(
+        '--addUser', 
+        action="store_true",
+        help="Flag to add a new user")
+    parser.add_argument(
         '--config', 
         type=str, 
         required=False,
-        help="Ruta del archivo de configuración (CSV o JSON)")
+        help="Path to the configuration file (CSV or JSON)")
     parser.add_argument(
         '--port', 
         type=int, 
         default=5000,
         required=False,
-        help="Puerto del servidor")
+        help="Port of the server")
     parser.add_argument(
         '--codium-port', 
         type=str, 
         default="8000",
         required=False,
-        help="Puerto del servidor")
+        help="Port of the Codium server")
     parser.add_argument(
         '--host', 
         type=str, 
         default="localhost",
         required=False,
-        help="Host del servidor (si quiere acceso remoto use 0.0.0.0)")
+        help="Host of the server (if you want remote access use 0.0.0.0)")
+    parser.add_argument(
+        '--ssh-security', 
+        action="store_true",
+        help="Flag to enable SSH security")
     arg = parser.parse_args()
+
+    if arg.addUser:
+        from utils.addUser import add_user
+        add_user()
+        exit(0)
 
     configPath = arg.config
     if configPath is not None:
@@ -472,4 +531,4 @@ if __name__ == "__main__":
     # Habilitar HTTPS (debes tener certificados SSL generados)
     print(f"{GREEN}Launch Program Manager on port {RED}{arg.port}{RESET}\n")
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
-    socketio.run(app, host=arg.host, port=arg.port, debug=False, ssl_context=context)
+    socketio.run(app, host=arg.host, port=arg.port, debug=True, ssl_context=context)

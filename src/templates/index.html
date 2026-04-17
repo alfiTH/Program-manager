@@ -1,67 +1,72 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Program Manager</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            margin: 0; 
-            padding: 0; 
-            text-align: center; 
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            text-align: center;
         }
 
         /* Status bar container */
-        .status-container { 
-            display: flex; 
-            justify-content: space-around; 
-            padding: 20px; 
-            gap: 15px; 
+        .status-container {
+            display: flex;
+            justify-content: space-around;
+            padding: 20px;
+            gap: 15px;
         }
 
         /* Each bar box */
-        .status-box { 
-            display: flex; 
-            align-items: center; 
-            flex-direction: column; 
-            width: 25%; 
+        .status-box {
+            display: flex;
+            align-items: center;
+            flex-direction: column;
+            width: 25%;
         }
 
         /* Bar itself */
-        .bar { height: 20px; 
-            width: 100%; 
-            background: gray; 
-            border-radius: 5px; 
-            overflow: hidden; 
-            margin-top: 5px; 
+        .bar {
+            height: 20px;
+            width: 100%;
+            background: gray;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-top: 5px;
         }
-        .progress { 
-            height: 100%; 
-            text-align: center; 
-            color: white; 
-            font-size: 14px; 
-            line-height: 20px; 
-            transition: width 0.5s; 
+
+        .progress {
+            height: 100%;
+            text-align: center;
+            color: white;
+            font-size: 14px;
+            line-height: 20px;
+            transition: width 0.5s;
         }
 
         /* General consumption meters */
-        .consumption-bar { 
-            margin: 10px auto; 
-            width: 80%; 
+        .consumption-bar {
+            margin: 10px auto;
+            width: 80%;
         }
-        .consumption-text { 
-            margin-top: 5px; 
-            font-weight: bold; 
+
+        .consumption-text {
+            margin-top: 5px;
+            font-weight: bold;
         }
 
         /* Terminal grid */
-        .grid-container { 
-            display: grid; 
-            grid-template-columns: repeat(auto-fill, minmax(25%, 1fr)); 
-            grid-template-rows: repeat(auto-fill, minmax(25%, 1fr)); 
-            gap: 10px; padding: 10px; 
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(25%, 1fr));
+            grid-template-rows: repeat(auto-fill, minmax(25%, 1fr));
+            gap: 10px;
+            padding: 10px;
 
         }
 
@@ -72,7 +77,7 @@
 
         .terminal-name-input {
             font-size: 14px;
-            width: 95%;
+            width: 90%;
             border: 1px solid #ccc;
             border-radius: 4px;
         }
@@ -92,25 +97,56 @@
 
         }
 
+        /* Botón X para eliminar terminal */
+        .close-terminal-btn {
+            position: absolute;
+            top: 2.5%;
+            right: 1%;
+            background: #ff4444;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 15px;
+            line-height: 15px;
+            text-align: center;
+            cursor: pointer;
+            z-index: 100;
+            transition: background 0.3s;
+        }
+
+        .close-terminal-btn:hover {
+            background: #cc0000;
+        }
+
         .terminal-box.error {
-        background: red;
-        border-color: red !important; /* Borde rojo */
-        box-shadow: 0 0 10px rgba(255, 0, 0, 0.5); /* Sombra roja para resaltar */
+            background: red;
+            border-color: red !important;
+            /* Borde rojo */
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+            /* Sombra roja para resaltar */
         }
+
         .terminal-box.warning {
-        background: yellow;
-        border-color: yellow !important; /* Borde rojo */
-        box-shadow: 0 0 10px rgba(255, 255, 0, 0.5); /* Sombra amarilla para resaltar */
+            background: yellow;
+            border-color: yellow !important;
+            /* Borde rojo */
+            box-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
+            /* Sombra amarilla para resaltar */
         }
+
         .terminal-box.running {
-        background: greenyellow;
-        border-color: greenyellow !important; /* Borde rojo */
-        box-shadow: 0 0 10px rgba(0, 255, 0, 0.5); /* Sombra verde para resaltar */
+            background: greenyellow;
+            border-color: greenyellow !important;
+            /* Borde rojo */
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
+            /* Sombra verde para resaltar */
         }
 
 
         /* Button grid in each terminal */
-        .button-container {         
+        .button-container {
             display: flex;
             flex-direction: row;
             flex-wrap: no-wrap;
@@ -126,66 +162,173 @@
             border-radius: 5px;
 
         }
+
         .button-container button {
             flex-grow: 1;
             overflow: hidden;
             text-overflow: ellipsis;
-            padding: 5px; 
+            padding: 5px;
             min-width: 10%;
-            max-width: 80%; 
+            max-width: 80%;
             border-radius: 5px;
-            ;
+        }
+
+        /* Modal de configuración */
+        .config-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .config-modal.active {
+            display: flex;
+        }
+
+        .config-modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 500px;
+            max-width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .config-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ccc;
+            padding-bottom: 10px;
+        }
+
+        .config-modal-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .config-modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+        }
+
+        .config-modal-close:hover {
+            color: #000;
+        }
+
+        .config-field {
+            margin-bottom: 15px;
+        }
+
+        .config-field label {
+            display: block;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .config-field input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+
+        .config-field-checkbox {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .config-field-checkbox input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+        }
+
+        .config-modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
         }
 
         /* Resource usage indicators */
         .info-box {
             max-width: 25%;
-            background: rgba(255,255,255,0.7);
+            min-width: 10%;
+            background: rgba(255, 255, 255, 0.7);
             color: black;
         }
 
         .terminal-output {
-            max-height: 65%;  
-            top:0%;
+            max-height: 65%;
+            top: 0%;
             position: relative;
-            overflow-y: auto;   
-            background: white;
-            border: 2px solid #000;  /* Borde de 2px de grosor, color negro */
-            padding: 5px;            /* Espacio interior para que el texto no toque el borde */
-            border-radius: 5px;    
+            overflow-y: auto;
+            
+            /* Mejorando el fondo para reducir fatiga visual */
+            background: linear-gradient(135deg, #f9f9f9 25%, #ffffff 25%, #ffffff 50%, #f9f9f9 50%, #f9f9f9 75%, #ffffff 75%);
+            background-size: 20px 20px;
+            
+            border: 2px solid #333;
+            padding: 10px;
+            
+            border-radius: 6px;
+            text-align: left;
+            
+            /* Fuente mejorada para legibilidad */
+            font-family: 'Consolas', 'DejaVu Sans Mono', 'monospace';
+            font-size: 12px;
+            line-height: 1.5;
+            white-space: pre-wrap;
         }
 
 
         /* Buttons between GPU and RAM bars */
-        .button-container-vertical { 
-            display: flex; 
-            flex-direction: column; 
-            justify-content: space-between; 
-            gap: 10px; 
-            align-items: center; 
+        .button-container-vertical {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+            align-items: center;
         }
 
-        .button-container-horizontal { 
-            display: flex; 
-            flex-direction: row; 
-            gap: 10px; /* Separación fija entre botones */
-            width: 100%; /* Asegura que ocupe todo el ancho del status-box */
-            padding:10px; 
+        .button-container-horizontal {
+            display: flex;
+            flex-direction: row;
+            gap: 10px;
+            /* Separación fija entre botones */
+            width: 100%;
+            /* Asegura que ocupe todo el ancho del status-box */
+            padding: 10px;
 
         }
 
         /* Caso 1: Pegados a la izquierda */
-        .align-left { 
-            justify-content: flex-start; 
+        .align-left {
+            justify-content: flex-start;
         }
 
         /* Caso 2: Pegados a la derecha */
-        .align-right { 
-            justify-content: flex-end; 
+        .align-right {
+            justify-content: flex-end;
         }
-
     </style>
 </head>
+
 <body>
 
     <!-- Global status -->
@@ -193,13 +336,17 @@
         <!-- CPU -->
         <div class="status-box">
             <p id="cpuText" class="consumption-text">CPU: 0%</p>
-            <div class="bar"><div class="progress" id="cpuUsage" style="background: blue;"></div></div>
+            <div class="bar">
+                <div class="progress" id="cpuUsage" style="background: blue;"></div>
+            </div>
         </div>
 
         <!-- RAM -->
         <div class="status-box">
             <p id="ramText" class="consumption-text">RAM: 0%</p>
-            <div class="bar"><div class="progress" id="ramUsage" style="background: green;"></div></div>
+            <div class="bar">
+                <div class="progress" id="ramUsage" style="background: green;"></div>
+            </div>
             <div class="button-container-horizontal align-right">
                 <button onclick="runAll()">Run All</button>
                 <button onclick="stopAll()">Stop All</button>
@@ -216,7 +363,9 @@
         <!-- GPU -->
         <div class="status-box">
             <p id="gpuText" class="consumption-text">GPU: 0%</p>
-            <div class="bar"><div class="progress" id="gpuUsage" style="background: orange;"></div></div>
+            <div class="bar">
+                <div class="progress" id="gpuUsage" style="background: orange;"></div>
+            </div>
             <div class="button-container-horizontal align-left">
                 <button onclick="cleanAll()">Clean All</button>
                 <button onclick="compileAll()">Build All</button>
@@ -226,22 +375,36 @@
         <!-- VRAM -->
         <div class="status-box">
             <p id="vramText" class="consumption-text">VRAM: 0%</p>
-            <div class="bar"><div class="progress" id="vramUsage" style="background: purple;"></div></div>
+            <div class="bar">
+                <div class="progress" id="vramUsage" style="background: purple;"></div>
+            </div>
         </div>
     </div>
 
     <!-- Terminal grid -->
     <div class="grid-container" id="terminals"></div>
 
+    <!-- Modal de configuración -->
+    <div id="configModal" class="config-modal">
+        <div class="config-modal-content">
+            <div class="config-modal-header">
+                <h3 class="config-modal-title">Configurar Terminal</h3>
+                <button class="config-modal-close" onclick="closeConfigModal()">×</button>
+            </div>
+            <div id="configModalBody">
+                <!-- Se rellena dinámicamente -->
+            </div>
+        </div>
+    </div>
+
     <script>
         var socket = io();
         var statuses = {};  // Status of each program
-        var counter = 0;
-        
+
         // === PERFORMANCE CONFIGURATION ===
         var MAX_TERMINAL_LINES = 1000;  // Máximo de líneas visibles por terminal
         var terminalLineCounts = {};     // Contador de líneas por terminal
-        
+
         // Buffers para agrupar actualizaciones DOM con requestAnimationFrame
         var pendingUpdates = {};  // {terminalId: [lines...]}
         var rafScheduled = false;
@@ -252,39 +415,30 @@
             }
         }
 
-        function addTerminal(id, name="Unnamed", restart=false) {
-            if (id==counter){
-                const checkedAttr = restart ? "checked" : "";
-                let div = document.createElement("div");
-                div.className = "terminal-box";
-                div.id = "terminal_" + id;
-                div.innerHTML += `
-                    <div id="name${id}" class="terminal-name">
-                        <input type="text" id="nameInput${id}" value="${name}" onblur="editName(${id})" class="terminal-name-input" />
-                    </div>
-                    <div id="terminalOutput_${id}" class="terminal-output"></div>
-                    
-                    <div class="button-container">
-                        <button onclick="runCommand(${id})">Run</button>
-                        <button onclick="stopCommand(${id})">Stop</button>
-                        <button onclick="cleanCommand(${id})">Clean</button>
-                        <button onclick="compileCommand(${id})">Build</button>
-                        <button onclick="editDirectory(${id})">Dir</button>
-                        <button onclick="editCommand(${id})">Cmd</button>
-                        <button onclick="openCodium(${id})">Code</button>
-                        <div>
-                            Restart<br>
-                            <input type="checkbox" id="restartCheckbox_${id}" onchange="toggleRestart(${id})" ${checkedAttr}>
-                        </div>
-                        <div class="info-box" id="info_${id}">CPU: 0%<br>RAM: 0%</div>
+        function addTerminal(id, name = "Unnamed") {
+            let div = document.createElement("div");
+            div.className = "terminal-box";
+            div.id = "terminal_" + id;
+            div.innerHTML += `
+                <button class="close-terminal-btn" onclick="deleteTerminal('${id}')" title="Eliminar terminal">×</button>
+                <div id="name${id}" class="terminal-name">
+                    <input type="text" id="nameInput${id}" value="${name}" onblur="editName('${id}')" class="terminal-name-input" />
+                </div>
+                <div id="terminalOutput_${id}" class="terminal-output"></div>
+                
+                <div class="button-container">
+                    <button onclick="runCommand('${id}')">Run</button>
+                    <button onclick="stopCommand('${id}')">Stop</button>
+                    <button onclick="cleanCommand('${id}')">Clean</button>
+                    <button onclick="compileCommand('${id}')">Build</button>
+                    <button onclick="openCodium('${id}')">Code</button>
+                    <button onclick="openConfigModal('${id}')">Config</button>
+                    <div class="info-box" id="info_${id}">CPU: 0%<br>RAM: 0%</div>
 
-                    </div>
-                    
-                `;
-                document.getElementById("terminals").appendChild(div);
-                terminalLineCounts[id] = 0;
-                counter+=1;
-            }
+                </div>
+            `;
+            document.getElementById("terminals").appendChild(div);
+            terminalLineCounts[id] = 0;
         }
 
         /**
@@ -296,7 +450,7 @@
                 pendingUpdates[id] = [];
             }
             pendingUpdates[id] = pendingUpdates[id].concat(lines);
-            
+
             if (!rafScheduled) {
                 rafScheduled = true;
                 requestAnimationFrame(flushTerminalUpdates);
@@ -309,17 +463,17 @@
          */
         function flushTerminalUpdates() {
             rafScheduled = false;
-            
+
             for (var id in pendingUpdates) {
                 var lines = pendingUpdates[id];
                 if (!lines || lines.length === 0) continue;
-                
+
                 var terminalOutput = document.getElementById("terminalOutput_" + id);
                 if (!terminalOutput) continue;
-                
+
                 // Detectar si el usuario está cerca del fondo ANTES de añadir
                 var isNearBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 50;
-                
+
                 // Usar DocumentFragment para insertar todas las líneas de golpe (un solo reflow)
                 var fragment = document.createDocumentFragment();
                 for (var i = 0; i < lines.length; i++) {
@@ -329,10 +483,10 @@
                     fragment.appendChild(lineDiv);
                 }
                 terminalOutput.appendChild(fragment);
-                
+
                 // Actualizar contador de líneas
                 terminalLineCounts[id] = (terminalLineCounts[id] || 0) + lines.length;
-                
+
                 // Eliminar líneas antiguas si excede el máximo
                 while (terminalLineCounts[id] > MAX_TERMINAL_LINES) {
                     var firstChild = terminalOutput.firstChild;
@@ -343,7 +497,7 @@
                         break;
                     }
                 }
-                
+
                 // Auto-scroll solo si el usuario estaba cerca del fondo
                 if (isNearBottom) {
                     terminalOutput.scrollTop = terminalOutput.scrollHeight;
@@ -435,9 +589,9 @@
         function toggleRestart(id) {
             const checkbox = document.getElementById(`restartCheckbox_${id}`);
             const isChecked = checkbox.checked;
-            socket.emit("editRestart", { 
-                id: id, 
-                restart: isChecked 
+            socket.emit("editRestart", {
+                id: id,
+                restart: isChecked
             });
         }
 
@@ -445,26 +599,94 @@
             const newName = document.getElementById(`nameInput${id}`).value;
 
             socket.emit("editName", {
-            id: id,
-            name: newName
+                id: id,
+                name: newName
             });
+        }
+
+        // Variables para el modal de configuración
+        var currentConfigTerminalId = null;
+
+        function openConfigModal(id) {
+            currentConfigTerminalId = id;
+
+            // Obtener la configuración actual del servidor
+            fetch(`/get-terminal-config?id=${id}`)
+                .then(response => response.json())
+                .then(data => {
+                    const modalBody = document.getElementById("configModalBody");
+                    modalBody.innerHTML = `
+                        <div class="config-field">
+                            <label>Directory:</label>
+                            <input type="text" id="configDirectory" value="${data.directory || ''}" />
+                        </div>
+                        <div class="config-field">
+                            <label>Command:</label>
+                            <input type="text" id="configCommand" value="${data.command || ''}" />
+                        </div>
+                        <div class="config-field config-field-checkbox">
+                            <input type="checkbox" id="configRestart" ${data.restart ? 'checked' : ''} />
+                            <label for="configRestart">Restart automatically</label>
+                        </div>
+                        <div class="config-field config-field-checkbox">
+                            <input type="checkbox" id="configBuildable" ${data.buildable !== false ? 'checked' : ''} />
+                            <label for="configBuildable">Buildable (Build)</label>
+                        </div>
+                        <div class="config-modal-buttons">
+                            <button onclick="closeConfigModal()">Cancel</button>
+                            <button onclick="saveTerminalConfig()">Save</button>
+                        </div>
+                    `;
+                    document.getElementById("configModal").classList.add("active");
+                })
+                .catch(err => {
+                    console.error("Error loading configuration:", err);
+                    alert("Error loading configuration");
+                });
+        }
+
+        function closeConfigModal() {
+            document.getElementById("configModal").classList.remove("active");
+            currentConfigTerminalId = null;
+        }
+
+        function saveTerminalConfig() {
+            if (currentConfigTerminalId === null) return;
+
+            const directory = document.getElementById("configDirectory").value;
+            const command = document.getElementById("configCommand").value;
+            const restart = document.getElementById("configRestart").checked;
+            const buildable = document.getElementById("configBuildable").checked;
+
+            // Enviar actualizaciones al servidor
+            socket.emit("editDirectory", { id: currentConfigTerminalId, directory: directory });
+            socket.emit("editCommand", { id: currentConfigTerminalId, command: command });
+            socket.emit("editRestart", { id: currentConfigTerminalId, restart: restart });
+            socket.emit("editBuildable", { id: currentConfigTerminalId, buildable: buildable });
+
+            closeConfigModal();
+        }
+
+        function deleteTerminal(id) {
+            var terminalName = document.getElementById(`nameInput${id}`).value;
+            if (confirm(`Are you sure you want to delete the terminal "${terminalName}"?`)) {
+                socket.emit("deleteTerminal", { id: id });
+            }
         }
         // New terminal creation
         function createNewTerminal() {
-            let newID = counter;
-            addTerminal(newID);
-            socket.emit("createTerminal", { id: newID });
+            socket.emit("createTerminal");
         }
 
         // Load Configuration
         function loadConfiguration() {
             const dir = prompt("Introduce el directorio:");
             if (dir && dir.trim() !== "") {
-                socket.emit("loadConfig", {directory: dir});
+                socket.emit("loadConfig", { directory: dir });
             }
         }
 
-        socket.on("configLoaded", function(data) {
+        socket.on("configLoaded", function (data) {
             if (data.status === "success") {
                 window.location.reload();
             }
@@ -472,37 +694,37 @@
 
         // Save Configuration
         function saveConfiguration() {
-        const dir = prompt("Introduce el directorio:");
+            const dir = prompt("Introduce el directorio:");
             if (dir && dir.trim() !== "") {
-                socket.emit("saveConfig", {directory: dir});
+                socket.emit("saveConfig", { directory: dir });
             }
         }
 
 
-        socket.on("newTerminal", function(data) {
-            addTerminal(data.id, data.name, data.restart);
+        socket.on("newTerminal", function (data) {
+            addTerminal(data.id, data.name);
         });
 
         // Handler para batches de output (nuevo, alto rendimiento)
-        socket.on("outputBatch", function(data) {
+        socket.on("outputBatch", function (data) {
             enqueueTerminalUpdate(data.id, data.lines);
         });
 
         // Handler legacy para output individual (retrocompatibilidad)
-        socket.on("output", function(data) {
+        socket.on("output", function (data) {
             updateTerminal(data.id, data.text);
         });
 
-        socket.on("terminalState", function(data) {
+        socket.on("terminalState", function (data) {
             // CLAVE: Define terminalBox aqu�, usando el ID del dato
             const terminalBox = document.getElementById("terminal_" + data.id);
-            
+
             // Asegurarse de que el elemento existe antes de manipularlo
             if (!terminalBox) {
                 console.error("Terminal box not found for ID:", data.id);
                 return;
             }
-            
+
             // El resto de la l�gica permanece igual
             terminalBox.classList.remove("running");
             terminalBox.classList.remove("error");
@@ -511,13 +733,36 @@
             terminalBox.classList.add(data.status);
         });
 
-        socket.on("generalUsage", function(data) {
+        socket.on("generalUsage", function (data) {
             updateGeneralUsage(data.cpu, data.gpu, data.ram, data.vram);
         });
 
-        socket.on("resourceUsage", function(data) {
+        socket.on("resourceUsage", function (data) {
             updateResourceUsage(data.id, data.cpu, data.ram);
+        });
+
+        // Handler para eliminar terminal del DOM cuando el servidor confirma la eliminación
+        socket.on("terminalDeleted", function (data) {
+            var terminalBox = document.getElementById("terminal_" + data.id);
+            if (terminalBox) {
+                // Animación de desvanecimiento opcional
+                terminalBox.style.transition = "opacity 0.3s, transform 0.3s";
+                terminalBox.style.opacity = "0";
+                terminalBox.style.transform = "scale(0.8)";
+
+                setTimeout(function () {
+                    terminalBox.remove();
+                    // Limpiar contadores asociados
+                    if (terminalLineCounts[data.id] !== undefined) {
+                        delete terminalLineCounts[data.id];
+                    }
+                    if (pendingUpdates[data.id] !== undefined) {
+                        delete pendingUpdates[data.id];
+                    }
+                }, 300);
+            }
         });
     </script>
 </body>
+
 </html>
