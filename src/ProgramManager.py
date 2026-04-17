@@ -505,6 +505,10 @@ if __name__ == "__main__":
         '--ssh-security', 
         action="store_true",
         help="Flag to enable SSH security")
+    parser.add_argument(
+        '--debug', 
+        action="store_true",
+        help="Flag to enable debug mode")
     arg = parser.parse_args()
 
     if arg.addUser:
@@ -531,4 +535,4 @@ if __name__ == "__main__":
     # Habilitar HTTPS (debes tener certificados SSL generados)
     print(f"{GREEN}Launch Program Manager on port {RED}{arg.port}{RESET}\n")
     context = ("certificates/cert.pem", "certificates/key.pem")  # Reemplaza con tus archivos de certificado
-    socketio.run(app, host=arg.host, port=arg.port, debug=True, ssl_context=context)
+    socketio.run(app, host=arg.host, port=arg.port, debug=arg.debug, ssl_context=context)
