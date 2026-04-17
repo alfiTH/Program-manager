@@ -1,0 +1,45 @@
+[
+    {
+        "name": "rcnode",
+        "directory": "/home/robolab",
+        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh",
+        "buildable": false
+    },
+    {
+        "name": "ZED",
+        "directory": "$ROBOCOMP/components/robocomp-shadow/insect/zed_component",
+        "command": "bin/zed_component etc/kinova_demo.toml"
+    },
+    {
+        "name": "Kinova",
+        "directory": "$ROBOCOMP/components/manipulation_kinova_gen3/agents/kinova_controller_cpp",
+        "command": "bin/kinova_controller_cpp etc/kinova_demo"
+    },
+    {
+        "name": "ArmControler",
+        "directory": "$ROBOCOMP/components/robocomp-p3bot/components/armController",
+        "command": "bin/armController etc/kinova_demo"
+    },
+    {
+        "name": "ALVR",
+        "directory": "$HOME/software/alvr_launcher_linux",
+        "command": "./ALVR_Launcher",
+        "buildable": false
+    },
+    {
+        "name": "Unreal",
+        "directory": "$HOME/Code/VR_teleoperation/CustomLibs",
+        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Binaries/Linux/UnrealEditor $HOME/Code/VR_teleoperation/VRTeleoperation.uproject"
+    },
+    {
+        "name": "Test Unreal",
+        "directory": "$HOME/Code/VR_teleoperation/CustomLibs/test",
+        "command": "build/RobotMiddlewareTests"
+    },
+    {
+        "name": "Compile Unreal",
+        "directory": ".",
+        "command": "$HOME/software/Linux_Unreal_Engine_5.6.1/Engine/Build/BatchFiles/Linux/Build.sh VRTeleoperationEditor Linux Development $HOME/Code/VR_teleoperation/VRTeleoperation.uproject",
+        "buildable": false
+    }
+]

@@ -15,29 +15,22 @@
     },
     {
         "name": "bridge",
-        "directory": "/home/robolab/robocomp/components/webots-bridge",
-        "command": "bin/Webots2Robocomp etc/config",
+        "directory": "/home/robolab/robocomp/components/webots-p3bot/components/p3bot-bridge",
+        "command": "bin/P3BotBridge etc/config",
         "restart": true,
         "buildable": true
     },
     {
         "name": "Helios",
         "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
-        "command": "bin/Lidar3D etc/config_helios_webots",
-        "restart": false,
-        "buildable": true
-    },
-    {
-        "name": "bpearl",
-        "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3D",
-        "command": "bin/Lidar3D etc/config_pearl_webots",
+        "command": "bin/Lidar3D etc/config_P3bot_helios_webots",
         "restart": false,
         "buildable": true
     },
     {
         "name": "filter",
         "directory": "/home/robolab/robocomp/components/robocomp-robolab/components/hardware/laser/lidar3DFilter",
-        "command": "bin/lidar3DFilter etc/config_shadow",
+        "command": "bin/lidar3DFilter etc/config_p3bot",
         "restart": false,
         "buildable": true
     },
