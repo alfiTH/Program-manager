@@ -1,4 +1,4 @@
-# #!/usr/bin/python3
+#!/usr/bin/env python3
 # # -*- coding: utf-8 -*-
 # '''Programa de visualización y manejo de programas '''
 
@@ -29,11 +29,11 @@ __author__ = "Alejandro Torrejón Harto"
 __copyright__ = "Copyright 2025, The Program Manager Project"
 __credits__ = ["Alejandro Torrejón Harto"]
 __license__ = "GNU General Public License v3.0"
-__version__ = "0.0.5"
-__date__ = "01/03/2025"
+__version__ = "1.0.0"
+__date__ = "27/04/2026"
 __maintainer__ = "Alejandro Torrejón Harto"
 __email__ = "atorrejon@unex.es"
-__status__ = "Prototype"
+__status__ = "Stable"
 
 
 
@@ -66,6 +66,7 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+terminalIsStopping = defaultdict(bool)
 terminals: dict[str, subprocess.Popen] = {}
 terminalsConfig = defaultdict(TerminalConfiguration)
 
@@ -430,17 +431,18 @@ def run_command_process(commands:list[list[str]], cwd:str, terminal_id:int, moni
 
                     if process.poll() is None:
                         socketio.emit("terminalState", {"id": terminal_id, "status": "warning"})
-                        return
+                        restart_needed = False
                     elif process.poll() != 0:
-                        if terminalsConfig[terminal_id].restart:
+                        if terminalsConfig[terminal_id].restart and not terminalIsStopping.get(terminal_id, False):
                             print(f"Terminal {terminal_id} failed with code {process.poll()}. Restarting...")
                             sleep(1)
                         else:
                             socketio.emit("terminalState", {"id": terminal_id, "status": "error"})
-                            return
+                            restart_needed = False
                     else:
                         socketio.emit("terminalState", {"id": terminal_id, "status": "ok"})
                         restart_needed = False
+                    terminalIsStopping[terminal_id] = False
 
             else:
                 print(f"Terminal {terminal_id}, yet in use")
@@ -451,7 +453,8 @@ def run_command_process(commands:list[list[str]], cwd:str, terminal_id:int, moni
 def stop_command_process(terminal_id):
     process = terminals.get(terminal_id)
     trys = 0
-    if process is not None:
+    if process is not None or terminalIsStopping.get(terminal_id, False):
+        terminalIsStopping[terminal_id] = True
         try:
             while process.poll() is None:
                 match trys:
