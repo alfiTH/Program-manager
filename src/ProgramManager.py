@@ -19,8 +19,10 @@ from werkzeug.security import check_password_hash
 from utils.addUser import load_users
 from utils.ansiParser import ansi_to_html
 from utils.configLoader import loadConfig, saveConfig, TerminalConfiguration
+from utils.clientCertAuth import ensure_ca, identify_client_cert
 import GPUtil
 import secrets
+import ssl
 import urllib.parse
 import re
 import pty
@@ -90,18 +92,35 @@ def load_user(user_id):
         return User(user_id)
     return None
 
+@app.before_request
+def try_client_cert_login():
+    """Si el navegador presentó un certificado de cliente válido en el handshake TLS
+    (SSL_CLIENT_CERT, expuesto por Werkzeug tras validar la cadena contra nuestra CA),
+    inicia sesión automáticamente sin pasar por el formulario de contraseña."""
+    if current_user.is_authenticated:
+        return
+    pem = request.environ.get("SSL_CLIENT_CERT")
+    if not pem:
+        return
+    username = identify_client_cert(pem)
+    if username is not None and username in USERS:
+        login_user(User(username))
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if current_user.is_authenticated:
+        return redirect(url_for("index"))
+
     if request.method == "POST":
         username = request.form["username"]
         password = request.form["password"]
-        
+
         # Check whether the user exists and the password is correct
         if username in USERS and check_password_hash(USERS[username], password):
             login_user(User(username))
             return redirect(url_for("index"))
-        
-        return "Error: Incorrect username or password."
+
+        return render_template("login.html", error="Error: Incorrect username or password.")
     return render_template("login.html")
 
 @app.route("/logout")
@@ -771,11 +790,19 @@ if __name__ == "__main__":
         required=False,
         help="Host of the server (if you want remote access use 0.0.0.0)")
     parser.add_argument(
-        '--ssh-security', 
+        '--addClientCert',
         action="store_true",
-        help="Flag to enable SSH security")
+        help="Flag to issue a client certificate (.p12) for an existing user")
     parser.add_argument(
-        '--debug', 
+        '--revokeClientCert',
+        action="store_true",
+        help="Flag to revoke a previously issued client certificate")
+    parser.add_argument(
+        '--cert-only',
+        action="store_true",
+        help="Flag to require a valid client certificate for every connection, disabling password login entirely (mutual TLS)")
+    parser.add_argument(
+        '--debug',
         action="store_true",
         help="Flag to enable debug mode")
     arg = parser.parse_args()
@@ -783,6 +810,16 @@ if __name__ == "__main__":
     if arg.addUser:
         from utils.addUser import add_user
         add_user()
+        exit(0)
+
+    if arg.addClientCert:
+        from utils.issueClientCert import add_client_cert
+        add_client_cert()
+        exit(0)
+
+    if arg.revokeClientCert:
+        from utils.revokeClientCert import revoke_client_cert_cli
+        revoke_client_cert_cli()
         exit(0)
 
     configPath = arg.config
@@ -803,5 +840,15 @@ if __name__ == "__main__":
     
     # Enable HTTPS (you must have SSL certificates generated)
     print(f"{GREEN}Launch Program Manager on port {RED}{arg.port}{RESET}\n")
-    context = ("certificates/cert.pem", "certificates/key.pem")  # Replace with your certificate files
+
+    ca_cert_path = ensure_ca()
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.load_cert_chain("certificates/cert.pem", "certificates/key.pem")  # Replace with your certificate files
+    context.load_verify_locations(cafile=ca_cert_path)
+    if arg.cert_only:
+        print(f"{YELLOW}Client-certificate-only mode: password login is disabled, a valid client certificate is required to connect.{RESET}\n")
+        context.verify_mode = ssl.CERT_REQUIRED
+    else:
+        context.verify_mode = ssl.CERT_OPTIONAL
+
     socketio.run(app, host=arg.host, port=arg.port, debug=arg.debug, ssl_context=context)

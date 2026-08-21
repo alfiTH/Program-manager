@@ -17,7 +17,7 @@ Program Manager Web is a browser-based control panel for running and monitoring 
 - **Real-time resource monitoring** — global CPU/RAM usage plus per-terminal CPU/RAM, and GPU load/VRAM for NVIDIA (via `GPUtil`), AMD, and Intel GPUs (via sysfs), rendered as gauges that fill the available width.
 - **VSCodium integration** — open a web-based VSCodium instance scoped to a terminal's working directory directly from the dashboard.
 - **Configuration management** — load and save terminal setups (name, directory, command, restart/buildable flags, dependencies) as JSON files, so a whole session can be restored in one click.
-- **User authentication** — login system backed by `users.json`, with passwords hashed via `utils/addUser.py`.
+- **User authentication** — login system backed by `users.json`, with passwords hashed via `utils/addUser.py`. Optionally, users can instead (or additionally) authenticate with a client TLS certificate issued by the app's own private CA — no password prompt, works in any normal browser (desktop or Android), and can be enforced exclusively with `--cert-only`.
 - **Collapsible terminals** — hide/show individual terminals or all of them at once to keep the layout manageable when running many programs.
 
 ## Prerequisites
@@ -68,6 +68,43 @@ Users live in `users.json` with hashed passwords. Add one with:
 python3 src/ProgramManager.py --addUser
 ```
 
+### Client certificate login (mutual TLS)
+As an alternative to passwords, a user can authenticate with a TLS client certificate.
+The app acts as its own private Certificate Authority (created automatically on first use,
+at `certificates/ca_cert.pem` / `certificates/ca_key.pem`) and only ever trusts certificates
+it issued itself — no external authenticator, no third-party account, no browser prompt.
+Once the certificate is installed, login is completely transparent: the browser presents it
+during the TLS handshake and the dashboard opens directly, with no login form at all.
+
+1. Issue a certificate for an existing user (also creates the CA the first time it's run):
+   ```bash
+   python3 src/ProgramManager.py --addClientCert
+   ```
+   This writes a password-protected bundle to `client_certs/<user>-<label>.p12`. Transfer it
+   to the user's device over a channel you trust, then delete the copy on the server.
+2. Install the `.p12` on the target device:
+   - **Desktop**: double-click it (or import it via the browser's/OS's certificate settings)
+     and enter the password you set when issuing it.
+   - **Android**: Settings → Security → "Install a certificate" (wording varies by
+     manufacturer/version), select the `.p12` file, and enter the password.
+3. Reload the dashboard — the browser will use the certificate automatically. By default
+   (no `--cert-only`), password login still works for anyone without a certificate.
+
+To **enforce** certificate-only access — no password login reachable at all, refused at the
+TLS handshake itself, like requiring mutual TLS on a corporate VPN — start the server with:
+```bash
+python3 src/ProgramManager.py --config etc/config.json --cert-only
+```
+In this mode, a browser without a valid certificate can't complete the TLS handshake at all
+(it will show a generic connection error, not a custom page) — keep this in mind before
+enabling it, and make sure every user has a certificate first.
+
+Revoke a lost or compromised certificate (it stops being accepted immediately, without
+touching the CA or anyone else's certificate):
+```bash
+python3 src/ProgramManager.py --revokeClientCert
+```
+
 ### Terminal configuration files
 A configuration file (JSON) describes the terminals to load at startup — see `etc/config.json` for examples. Each entry supports:
 ```json
@@ -96,9 +133,11 @@ Configurations can also be loaded/saved from the running dashboard via **Load Co
    | `--port PORT` | `5000` | Port for the web dashboard |
    | `--codium-port PORT` | `8000` | Port for the embedded VSCodium server |
    | `--host HOST` | `localhost` | Bind address (use `0.0.0.0` for remote access) |
-   | `--ssh-security` | off | Enable SSH-based security |
+   | `--cert-only` | off | Require a valid client certificate for every connection (disables password login) |
    | `--debug` | off | Run Flask in debug mode |
    | `--addUser` | — | Add a new user and exit |
+   | `--addClientCert` | — | Issue a client certificate (`.p12`) for an existing user and exit |
+   | `--revokeClientCert` | — | Revoke a previously issued client certificate and exit |
 
 2. **Access the dashboard**:
    Open `https://<server_ip>:5000` (or `https://localhost:5000`) in your browser. Since certificates are self-signed, you'll need to accept the browser security warning.
@@ -110,9 +149,11 @@ Configurations can also be loaded/saved from the running dashboard via **Load Co
 - `src/`
   - `ProgramManager.py` — Flask/Socket.IO application: terminal lifecycle, resource monitoring, config load/save.
   - `templates/` — `index.html` (dashboard) and `login.html`.
-  - `utils/` — `addUser.py` (user management), `ansiParser.py` (ANSI-to-HTML), `configLoader.py` (config load/save).
+  - `utils/` — `addUser.py` (user management), `clientCertAuth.py` (private CA + client certificate issuance/verification), `issueClientCert.py` / `revokeClientCert.py` (client cert CLI), `ansiParser.py` (ANSI-to-HTML), `configLoader.py` (config load/save).
 - `etc/` — Sample terminal configuration files.
-- `certificates/` — SSL certificate/key for HTTPS.
+- `certificates/` — Server SSL certificate/key for HTTPS, plus the app's private CA (`ca_cert.pem` / `ca_key.pem`) used to issue and verify client certificates.
+- `client_certs/` — Issued client certificate bundles (`.p12`), pending transfer to their users.
+- `client_certs.json` — Registry of issued client certificates (serial, user, label, revoked state).
 - `users.json` — Hashed user credentials.
 - `requeriments.txt` — Python dependencies.
 

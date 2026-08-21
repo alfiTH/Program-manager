@@ -1,6 +1,8 @@
 #SECRET THINGS
 *.pem
 users.json
+client_certs/
+client_certs.json
 .vscode
 
 

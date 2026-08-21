@@ -1,37 +1,79 @@
 [
     {
-      "name": "webots",
-      "directory": ".",
-      "command": "webots"
+        "name": "webots",
+        "directory": ".",
+        "command": "webots",
+        "restart": false,
+        "buildable": false,
+        "robocomp": false,
+        "depends_on": []
     },
     {
-      "name": "rcnode",
-      "directory": ".",
-      "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh"
+        "name": "rcnode",
+        "directory": ".",
+        "command": "bash $ROBOCOMP/tools/rcnode/rcnode.sh",
+        "restart": false,
+        "buildable": false,
+        "robocomp": false,
+        "depends_on": []
     },
     {
-      "name": "bridge",
-      "directory": "$ROBOCOMP/components/webots-bridge",
-      "command": "bin/Webots2Robocomp etc/config"
+        "name": "bridge",
+        "directory": "$ROBOCOMP/components/webots-bridge",
+        "command": "bin/Webots2Robocomp etc/config",
+        "restart": false,
+        "buildable": true,
+        "robocomp": false,
+        "depends_on": [
+            {
+                "name": "webots",
+                "seconds": 3.0
+            }
+        ]
     },
     {
-      "name": "Helios",
-      "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
-      "command": "bin/Lidar3D etc/config_helios_webots"
+        "name": "Helios",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_helios_webots",
+        "restart": false,
+        "buildable": true,
+        "robocomp": false,
+        "depends_on": []
     },
     {
-      "name": "bpearl",
-      "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
-      "command": "bin/Lidar3D etc/config_pearl_webots"
+        "name": "bpearl",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/hardware/laser/lidar3D",
+        "command": "bin/Lidar3D etc/config_pearl_webots",
+        "restart": false,
+        "buildable": true,
+        "robocomp": false,
+        "depends_on": [
+            {
+                "name": "webots",
+                "seconds": 3.0
+            },
+            {
+                "name": "bridge",
+                "seconds": 10.0
+            }
+        ]
     },
     {
-      "name": "viewer_helios",
-      "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
-      "command": "bin/lidar3dviewer etc/config_helios"
+        "name": "viewer_helios",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+        "command": "bin/lidar3dviewer etc/config_helios",
+        "restart": false,
+        "buildable": true,
+        "robocomp": false,
+        "depends_on": []
     },
     {
-      "name": "viewer_bpearl",
-      "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
-      "command": "bin/lidar3dviewer etc/config_pearl"
+        "name": "viewer_bpearl",
+        "directory": "$ROBOCOMP/components/robocomp-robolab/components/viewers/lidar3d_viewer",
+        "command": "bin/lidar3dviewer etc/config_pearl",
+        "restart": false,
+        "buildable": true,
+        "robocomp": false,
+        "depends_on": []
     }
-  ]
+]
