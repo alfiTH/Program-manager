@@ -15,7 +15,10 @@ class TerminalConfiguration:
     command: List[List[str]] = (("echo", "command did not assigned"),)
     restart: bool = False
     buildable: bool = True
-    
+    robocomp: bool = False
+    # Dependencias temporales de arranque: [{"name": "otherTerminal", "seconds": 3}, ...]
+    depends_on: tuple = ()
+
     def to_dict(self):
         """Convierte la instancia de TerminalConfiguration a un diccionario."""
         return {
@@ -23,7 +26,9 @@ class TerminalConfiguration:
             "directory": self.directory,
             "command": self.command,
             "restart": self.restart,
-            "buildable": self.buildable
+            "buildable": self.buildable,
+            "robocomp": self.robocomp,
+            "depends_on": list(self.depends_on)
         }
 
     @staticmethod
@@ -34,7 +39,9 @@ class TerminalConfiguration:
             directory=data.get("directory", HOME),
             command=data.get("command", [["echo", "command did not assigned"],]),
             restart=data.get("restart", False),
-            buildable=data.get("buildable", True)
+            buildable=data.get("buildable", True),
+            robocomp=data.get("robocomp", False),
+            depends_on=tuple(data.get("depends_on", []))
         )
 
 
@@ -45,12 +52,11 @@ def loadConfig(filename: str) -> defaultdict[str, TerminalConfiguration]:
         with open(filename, 'r') as f:
             config = json.load(f)
             for terminal_data in config:
-                if 'directory' in terminal_data:
-                    terminal_data['directory'] = os.path.expandvars(terminal_data['directory'])
-                
+                # No expandimos variables de entorno aquí: se guardan tal cual para que
+                # el save posterior no las "queme" con su valor absoluto. La expansión
+                # ocurre justo antes de lanzar el proceso (ver ProgramManager.py).
                 if 'command' in terminal_data:
-                    raw_command = os.path.expandvars(terminal_data["command"])
-                    split_commands = re.split(r'&&|;', raw_command)
+                    split_commands = re.split(r'&&|;', terminal_data["command"])
                     terminal_data['command'] = [cmd.strip().split() for cmd in split_commands if cmd.strip()]
                 terminalsConfig[str(uuid.uuid4())] = TerminalConfiguration.from_dict(terminal_data)
     else:

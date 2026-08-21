@@ -7,173 +7,676 @@
     <title>Program Manager</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.4.1/socket.io.js"></script>
     <style>
+        :root {
+            --color-bg: #f5f6fa;
+            --color-surface: #ffffff;
+            --color-surface-alt: #f0f1f5;
+            --color-border: #e1e4ea;
+            --color-text: #1f2328;
+            --color-text-muted: #636c76;
+            --color-primary: #2563eb;
+            --color-primary-hover: #1d4ed8;
+            --color-primary-bg: #dbeafe;
+            --color-success: #15803d;
+            --color-success-bg: #dcfce7;
+            --color-danger: #dc2626;
+            --color-danger-bg: #fee2e2;
+            --color-warning: #b45309;
+            --color-warning-bg: #fef3c7;
+            --color-info: #0369a1;
+            --color-info-bg: #e0f2fe;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-sm: 0 1px 2px rgba(16, 24, 40, .06);
+            --shadow-md: 0 4px 12px rgba(16, 24, 40, .08);
+            --shadow-lg: 0 10px 30px rgba(16, 24, 40, .12);
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: 'Cascadia Code', Consolas, 'DejaVu Sans Mono', monospace;
+            --transition: 150ms ease;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --color-bg: #14151a;
+                --color-surface: #1c1e26;
+                --color-surface-alt: #23252e;
+                --color-border: #2c2f3a;
+                --color-text: #e7e9ee;
+                --color-text-muted: #9aa1ac;
+                --color-primary-bg: #1e2f52;
+                --color-success-bg: #123a24;
+                --color-danger-bg: #3a1c1f;
+                --color-warning-bg: #3a2d10;
+                --color-info-bg: #133247;
+                --shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+                --shadow-md: 0 4px 12px rgba(0, 0, 0, .45);
+                --shadow-lg: 0 10px 30px rgba(0, 0, 0, .55);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: var(--font-sans);
             margin: 0;
             padding: 0;
-            text-align: center;
+            background: var(--color-bg);
+            color: var(--color-text);
+        }
+
+        button:focus-visible,
+        input:focus-visible,
+        [tabindex]:focus-visible {
+            outline: 2px solid var(--color-primary);
+            outline-offset: 2px;
+        }
+
+        button {
+            font-family: inherit;
+            font-size: 13px;
+            font-weight: 500;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            background: var(--color-surface-alt);
+            color: var(--color-text);
+            cursor: pointer;
+            transition: background var(--transition), border-color var(--transition), transform 80ms ease;
+        }
+
+        button:hover {
+            background: var(--color-border);
+        }
+
+        button:active {
+            transform: scale(0.97);
+        }
+
+        input[type="text"] {
+            font-family: inherit;
+            color: var(--color-text);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+        }
+
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--color-border);
+            border-radius: 10px;
         }
 
         /* Status bar container */
         .status-container {
             display: flex;
-            justify-content: space-around;
-            padding: 20px;
-            gap: 15px;
+            flex-wrap: wrap;
+            justify-content: flex-start;
+            align-items: flex-start;
+            padding: 16px 20px;
+            gap: 28px;
+            position: sticky;
+            top: 0;
+            z-index: 500;
+            background: var(--color-surface);
+            border-bottom: 1px solid var(--color-border);
+            box-shadow: var(--shadow-sm);
+        }
+
+        /* A column of stacked gauges (e.g. CPU+RAM, or one GPU's load+VRAM) */
+        .gauge-column {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            flex: 1 1 180px;
+        }
+
+        .gauge-column-label {
+            margin: 0;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .03em;
+            color: var(--color-text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 220px;
+        }
+
+        .gpu-columns {
+            display: flex;
+            flex-wrap: wrap;
+            flex: 1 1 auto;
+            gap: 28px;
         }
 
         /* Each bar box */
         .status-box {
             display: flex;
-            align-items: center;
+            align-items: stretch;
             flex-direction: column;
-            width: 25%;
+            width: 100%;
         }
 
         /* Bar itself */
         .bar {
-            height: 20px;
+            height: 10px;
             width: 100%;
-            background: gray;
-            border-radius: 5px;
+            background: var(--color-surface-alt);
+            border-radius: 999px;
             overflow: hidden;
-            margin-top: 5px;
+            margin-top: 6px;
         }
 
         .progress {
             height: 100%;
-            text-align: center;
-            color: white;
-            font-size: 14px;
-            line-height: 20px;
-            transition: width 0.5s;
-        }
-
-        /* General consumption meters */
-        .consumption-bar {
-            margin: 10px auto;
-            width: 80%;
+            border-radius: 999px;
+            transition: width 0.4s ease;
         }
 
         .consumption-text {
-            margin-top: 5px;
-            font-weight: bold;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--color-text-muted);
         }
 
         /* Terminal grid */
         .grid-container {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(25%, 1fr));
-            grid-template-rows: repeat(auto-fill, minmax(25%, 1fr));
-            gap: 10px;
-            padding: 10px;
-
+            grid-template-columns: repeat(auto-fill, minmax(460px, 1fr));
+            gap: 16px;
+            padding: 20px;
         }
 
         .terminal-name {
-            font-weight: bold;
-            padding: 5px;
+            flex: 1;
+            min-width: 0;
+            font-weight: 600;
+            text-align: left;
         }
 
         .terminal-name-input {
+            width: 100%;
             font-size: 14px;
-            width: 90%;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            font-weight: 600;
+            padding: 4px 6px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            background: transparent;
+            transition: border-color var(--transition), background var(--transition);
+        }
+
+        .terminal-name-input:hover,
+        .terminal-name-input:focus-visible {
+            border-color: var(--color-border);
+            background: var(--color-surface);
         }
 
         .terminal-box {
-            background: white;
-            color: black;
-            padding: 5px;
-            height: 300px;
-            font-family: monospace;
-            position: relative;
-            border: 1px solid #000;
-            border-radius: 4px;
+            background: var(--color-surface);
+            color: var(--color-text);
+            padding: 12px;
+            height: 420px;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
             display: flex;
             flex-direction: column;
-            justify-content: flex-start;
-
+            transition: background var(--transition), border-color var(--transition);
         }
 
-        /* Botón X para eliminar terminal */
-        .close-terminal-btn {
-            position: absolute;
-            top: 2.5%;
-            right: 1%;
-            background: #ff4444;
-            color: white;
-            border: none;
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding-bottom: 10px;
+            margin-bottom: 10px;
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .status-dot {
+            width: 9px;
+            height: 9px;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
-            font-size: 15px;
-            line-height: 15px;
-            text-align: center;
-            cursor: pointer;
-            z-index: 100;
-            transition: background 0.3s;
+            background: var(--color-text-muted);
+        }
+
+        .status-text {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            color: var(--color-text-muted);
+            white-space: nowrap;
+        }
+
+        /* Close button to delete a terminal */
+        .close-terminal-btn,
+        .collapse-terminal-btn {
+            flex-shrink: 0;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .close-terminal-btn {
+            background: var(--color-danger-bg);
+            color: var(--color-danger);
+            font-size: 16px;
         }
 
         .close-terminal-btn:hover {
-            background: #cc0000;
+            background: var(--color-danger);
+            color: white;
         }
 
-        .terminal-box.error {
-            background: red;
-            border-color: red !important;
-            /* Borde rojo */
-            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
-            /* Sombra roja para resaltar */
+        /* Button to collapse/expand a terminal's output */
+        .collapse-terminal-btn {
+            background: var(--color-surface-alt);
+            color: var(--color-text-muted);
+            font-size: 12px;
         }
 
-        .terminal-box.warning {
-            background: yellow;
-            border-color: yellow !important;
-            /* Borde rojo */
-            box-shadow: 0 0 10px rgba(255, 255, 0, 0.5);
-            /* Sombra amarilla para resaltar */
+        .collapse-terminal-btn:hover {
+            background: var(--color-border);
+            color: var(--color-text);
+        }
+
+        /* ==== General layout: left sidebar + main content ==== */
+        .app-layout {
+            display: flex;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        .main-content {
+            flex: 1;
+            min-width: 0;
+        }
+
+        /* Sidebar for collapsed terminals (dropdown menu) */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            background: var(--color-surface);
+            border-right: 1px solid var(--color-border);
+            text-align: left;
+            position: sticky;
+            top: 0;
+            align-self: flex-start;
+            max-height: 100vh;
+            overflow-y: auto;
+            z-index: 400;
+        }
+
+        .sidebar-all-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            padding: 12px;
+            background: var(--color-surface-alt);
+            border-bottom: 1px solid var(--color-border);
+        }
+
+        .sidebar-all-buttons button {
+            flex: 1 1 calc(50% - 6px);
+            padding: 7px 6px;
+            font-size: 12px;
+        }
+
+        .sidebar-all-buttons button.sidebar-btn-full {
+            flex-basis: 100%;
+        }
+
+        .build-all-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: stretch;
+            gap: 6px;
+        }
+
+        .build-all-row .build-all-btn {
+            flex: 1 1 auto;
+        }
+
+        .build-batch-field {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            flex: 0 0 auto;
+            padding: 0 8px;
+            font-size: 11px;
+            color: var(--color-text-muted);
+            white-space: nowrap;
+        }
+
+        .build-batch-field input[type="number"] {
+            width: 42px;
+            font-family: inherit;
+            font-size: 12px;
+            color: var(--color-text);
+            background: var(--color-surface);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
+            padding: 4px 5px;
+        }
+
+        .sidebar-all-buttons button.btn-run-all {
+            background: var(--color-success);
+            color: white;
+        }
+
+        .sidebar-all-buttons button.btn-run-all:hover {
+            background: #12692f;
+        }
+
+        .sidebar-all-buttons button.btn-stop-all {
+            background: var(--color-danger);
+            color: white;
+        }
+
+        .sidebar-all-buttons button.btn-stop-all:hover {
+            background: #b91c1c;
+        }
+
+        .sidebar-header {
+            width: 100%;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            padding: 14px;
+            background: var(--color-text);
+            color: var(--color-surface);
+            font-size: 14px;
+            font-weight: 600;
+            text-align: left;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+
+        .sidebar-header-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            color: inherit;
+            font: inherit;
+            padding: 0;
+        }
+
+        .sidebar-header .arrow {
+            transition: transform 0.2s;
+        }
+
+        .sidebar.menu-collapsed .sidebar-header .arrow {
+            transform: rotate(-90deg);
+        }
+
+        .sidebar-header-btn {
+            background: color-mix(in srgb, var(--color-surface) 10%, transparent);
+            color: var(--color-surface);
+            border: 1px solid color-mix(in srgb, var(--color-surface) 20%, transparent);
+            padding: 3px 8px;
+            font-size: 11px;
+        }
+
+        .sidebar-header-btn:hover {
+            background: color-mix(in srgb, var(--color-surface) 20%, transparent);
+        }
+
+        .sidebar-create-btn {
+            background: color-mix(in srgb, var(--color-surface) 12%, transparent);
+            color: var(--color-surface);
+            border: 1px solid color-mix(in srgb, var(--color-surface) 25%, transparent);
+            padding: 3px 10px;
+            font-size: 12px;
+        }
+
+        .sidebar-create-btn:hover {
+            background: color-mix(in srgb, var(--color-surface) 22%, transparent);
+        }
+
+        .sidebar-badge {
+            margin-left: auto;
+            background: color-mix(in srgb, var(--color-surface) 15%, transparent);
+            border-radius: 999px;
+            padding: 2px 9px;
+            font-size: 12px;
+        }
+
+        .sidebar-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px;
+        }
+
+        .sidebar.menu-collapsed .sidebar-list {
+            display: none;
+        }
+
+        .sidebar-list:empty::after {
+            content: "No collapsed terminals";
+            color: var(--color-text-muted);
+            font-size: 12px;
+            font-style: italic;
+            padding: 10px;
+            display: block;
+        }
+
+        /* Collapsed terminal: compact row inside the sidebar */
+        .terminal-box.collapsed {
+            height: auto;
+            width: 100%;
+            flex-direction: row;
+            align-items: center;
+            padding: 6px 10px;
+            gap: 8px;
+            border-radius: var(--radius-md);
+        }
+
+        .terminal-box.collapsed .terminal-output,
+        .terminal-box.collapsed .quick-cmd-input,
+        .terminal-box.collapsed .close-terminal-btn,
+        .terminal-box.collapsed .status-pill {
+            display: none;
+        }
+
+        .terminal-box.collapsed .terminal-header {
+            flex: 1;
+            min-width: 0;
+            padding: 0;
+            margin: 0;
+            border: none;
+        }
+
+        .terminal-box.collapsed .terminal-name-input {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .terminal-box.collapsed .button-container {
+            border: none;
+            margin: 0;
+            padding: 0;
+            flex-wrap: nowrap;
+            flex-shrink: 0;
+            gap: 4px;
+        }
+
+        .terminal-box.collapsed .button-container button:not(.btn-run):not(.btn-stop) {
+            display: none;
+        }
+
+        .terminal-box.collapsed .button-container button {
+            flex: none;
+        }
+
+        .terminal-box.collapsed .info-box {
+            display: none;
+        }
+
+        /* In compact mode, status color is shown as a side stripe (not color-only) */
+        .terminal-box.collapsed.running {
+            border-left: 4px solid var(--color-success);
+        }
+
+        .terminal-box.collapsed.error {
+            border-left: 4px solid var(--color-danger);
+        }
+
+        .terminal-box.collapsed.warning {
+            border-left: 4px solid var(--color-warning);
+        }
+
+        .terminal-box.collapsed.waiting {
+            border-left: 4px solid var(--color-info);
+        }
+
+        .quick-cmd-input {
+            width: 100%;
+            margin-top: 10px;
+            padding: 7px 10px;
+            font-size: 12px;
+            font-family: var(--font-mono);
         }
 
         .terminal-box.running {
-            background: greenyellow;
-            border-color: greenyellow !important;
-            /* Borde rojo */
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.5);
-            /* Sombra verde para resaltar */
+            background: var(--color-success-bg);
+            border-color: var(--color-success);
         }
 
+        .terminal-box.running .status-dot {
+            background: var(--color-success);
+        }
+
+        .terminal-box.running .status-text {
+            color: var(--color-success);
+        }
+
+        .terminal-box.error {
+            background: var(--color-danger-bg);
+            border-color: var(--color-danger);
+        }
+
+        .terminal-box.error .status-dot {
+            background: var(--color-danger);
+        }
+
+        .terminal-box.error .status-text {
+            color: var(--color-danger);
+        }
+
+        .terminal-box.warning {
+            background: var(--color-warning-bg);
+            border-color: var(--color-warning);
+        }
+
+        .terminal-box.warning .status-dot {
+            background: var(--color-warning);
+        }
+
+        .terminal-box.warning .status-text {
+            color: var(--color-warning);
+        }
+
+        .terminal-box.waiting {
+            background: var(--color-info-bg);
+            border-color: var(--color-info);
+        }
+
+        .terminal-box.waiting .status-dot {
+            background: var(--color-info);
+        }
+
+        .terminal-box.waiting .status-text {
+            color: var(--color-info);
+        }
 
         /* Button grid in each terminal */
         .button-container {
             display: flex;
-            flex-direction: row;
-            flex-wrap: no-wrap;
-            gap: 10px;
-            position: absolute;
-            height: 30px;
-            top: 85%;
-            width: 97%;
-            padding: 5px;
-            background: white;
-            font-size: small;
-            justify-content: space-between;
-            border-radius: 5px;
-
+            flex-wrap: wrap;
+            gap: 8px;
+            padding-top: 10px;
+            margin-top: 10px;
+            border-top: 1px solid var(--color-border);
+            align-items: center;
         }
 
         .button-container button {
-            flex-grow: 1;
+            flex: 1 1 auto;
             overflow: hidden;
             text-overflow: ellipsis;
-            padding: 5px;
-            min-width: 10%;
-            max-width: 80%;
-            border-radius: 5px;
+            padding: 6px 8px;
+            min-width: 52px;
         }
 
-        /* Modal de configuración */
+        .btn-build:disabled,
+        .btn-clean:disabled {
+            text-decoration: line-through;
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-run {
+            background: var(--color-success);
+            color: white;
+        }
+
+        .btn-run:hover {
+            background: #12692f;
+        }
+
+        .btn-stop {
+            background: var(--color-danger);
+            color: white;
+        }
+
+        .btn-stop:hover {
+            background: #b91c1c;
+        }
+
+        .btn-code,
+        .btn-config {
+            background: var(--color-info-bg);
+            color: var(--color-info);
+        }
+
+        .btn-code:hover,
+        .btn-config:hover {
+            background: var(--color-info);
+            color: white;
+        }
+
+        /* Configuration modal */
         .config-modal {
             display: none;
             position: fixed;
@@ -181,7 +684,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.5);
+            background: rgba(15, 17, 21, 0.55);
             z-index: 1000;
             justify-content: center;
             align-items: center;
@@ -192,40 +695,46 @@
         }
 
         .config-modal-content {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
+            background: var(--color-surface);
+            color: var(--color-text);
+            padding: 22px;
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
             width: 500px;
             max-width: 90%;
             max-height: 80vh;
             overflow-y: auto;
+            text-align: left;
         }
 
         .config-modal-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 20px;
-            border-bottom: 1px solid #ccc;
-            padding-bottom: 10px;
+            margin-bottom: 18px;
+            border-bottom: 1px solid var(--color-border);
+            padding-bottom: 12px;
         }
 
         .config-modal-title {
             font-size: 18px;
-            font-weight: bold;
+            font-weight: 600;
             margin: 0;
         }
 
         .config-modal-close {
-            background: none;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            color: #666;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background: var(--color-surface-alt);
+            font-size: 18px;
+            line-height: 1;
+            color: var(--color-text-muted);
         }
 
         .config-modal-close:hover {
-            color: #000;
+            background: var(--color-border);
+            color: var(--color-text);
         }
 
         .config-field {
@@ -234,17 +743,19 @@
 
         .config-field label {
             display: block;
-            font-weight: bold;
-            margin-bottom: 5px;
+            font-weight: 600;
+            font-size: 13px;
+            margin-bottom: 6px;
         }
 
         .config-field input[type="text"] {
             width: 100%;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            padding: 8px 10px;
             font-size: 14px;
-            box-sizing: border-box;
+        }
+
+        .config-field input[type="text"]:focus-visible {
+            border-color: var(--color-primary);
         }
 
         .config-field-checkbox {
@@ -254,8 +765,9 @@
         }
 
         .config-field-checkbox input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
+            width: 18px;
+            height: 18px;
+            accent-color: var(--color-primary);
         }
 
         .config-modal-buttons {
@@ -265,134 +777,126 @@
             margin-top: 20px;
         }
 
+        .config-modal-buttons button {
+            padding: 8px 16px;
+        }
+
+        .config-modal-buttons button:last-child {
+            background: var(--color-primary);
+            color: white;
+        }
+
+        .config-modal-buttons button:last-child:hover {
+            background: var(--color-primary-hover);
+        }
+
         /* Resource usage indicators */
         .info-box {
-            max-width: 25%;
-            min-width: 10%;
-            background: rgba(255, 255, 255, 0.7);
-            color: black;
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 9px;
+            border-radius: 999px;
+            background: var(--color-surface-alt);
+            color: var(--color-text-muted);
+            white-space: nowrap;
+            margin-left: auto;
         }
 
         .terminal-output {
-            max-height: 65%;
-            top: 0%;
-            position: relative;
+            flex: 1;
+            min-height: 0;
             overflow-y: auto;
-            
-            /* Mejorando el fondo para reducir fatiga visual */
-            background: linear-gradient(135deg, #f9f9f9 25%, #ffffff 25%, #ffffff 50%, #f9f9f9 50%, #f9f9f9 75%, #ffffff 75%);
-            background-size: 20px 20px;
-            
-            border: 2px solid #333;
-            padding: 10px;
-            
-            border-radius: 6px;
+            background: #1a1b26;
+            color: #d4d7de;
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-md);
+            padding: 10px 12px;
             text-align: left;
-            
-            /* Fuente mejorada para legibilidad */
-            font-family: 'Consolas', 'DejaVu Sans Mono', 'monospace';
-            font-size: 12px;
-            line-height: 1.5;
+            font-family: var(--font-mono);
+            font-size: 12.5px;
+            line-height: 1.55;
             white-space: pre-wrap;
-        }
-
-
-        /* Buttons between GPU and RAM bars */
-        .button-container-vertical {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .button-container-horizontal {
-            display: flex;
-            flex-direction: row;
-            gap: 10px;
-            /* Separación fija entre botones */
-            width: 100%;
-            /* Asegura que ocupe todo el ancho del status-box */
-            padding: 10px;
-
-        }
-
-        /* Caso 1: Pegados a la izquierda */
-        .align-left {
-            justify-content: flex-start;
-        }
-
-        /* Caso 2: Pegados a la derecha */
-        .align-right {
-            justify-content: flex-end;
         }
     </style>
 </head>
 
 <body>
 
-    <!-- Global status -->
-    <div class="status-container" id="globalStatus">
-        <!-- CPU -->
-        <div class="status-box">
-            <p id="cpuText" class="consumption-text">CPU: 0%</p>
-            <div class="bar">
-                <div class="progress" id="cpuUsage" style="background: blue;"></div>
-            </div>
-        </div>
-
-        <!-- RAM -->
-        <div class="status-box">
-            <p id="ramText" class="consumption-text">RAM: 0%</p>
-            <div class="bar">
-                <div class="progress" id="ramUsage" style="background: green;"></div>
-            </div>
-            <div class="button-container-horizontal align-right">
-                <button onclick="runAll()">Run All</button>
-                <button onclick="stopAll()">Stop All</button>
-            </div>
-        </div>
-
-        <!-- Button Container between GPU and RAM -->
-        <div class="button-container-vertical">
-            <button onclick="loadConfiguration()">Load Configuration</button>
-            <button onclick="saveConfiguration()">Save Configuration</button>
-            <button onclick="createNewTerminal()">Create Terminal</button>
-        </div>
-
-        <!-- GPU -->
-        <div class="status-box">
-            <p id="gpuText" class="consumption-text">GPU: 0%</p>
-            <div class="bar">
-                <div class="progress" id="gpuUsage" style="background: orange;"></div>
-            </div>
-            <div class="button-container-horizontal align-left">
+    <div class="app-layout">
+        <!-- Sidebar: collapsed terminals (dropdown menu) -->
+        <aside class="sidebar" id="sidebar" aria-label="Terminals and global actions">
+            <div class="sidebar-all-buttons">
+                <button class="btn-run-all" onclick="runAll()">Run All</button>
+                <button class="btn-stop-all" onclick="stopAll()">Stop All</button>
                 <button onclick="cleanAll()">Clean All</button>
-                <button onclick="compileAll()">Build All</button>
+                <div class="build-all-row sidebar-btn-full">
+                    <button class="build-all-btn" onclick="compileAll()">Build All</button>
+                    <label class="build-batch-field" for="buildBatchSize" title="Max simultaneous builds">
+                        Batch
+                        <input type="number" id="buildBatchSize" min="1" value="2" aria-label="Max simultaneous builds" />
+                    </label>
+                    <label class="build-batch-field" for="buildJobs" title="Compiler jobs per build (make -j)">
+                        -j
+                        <input type="number" id="buildJobs" min="1" value="4" aria-label="Compiler jobs per build" />
+                    </label>
+                </div>
+                <button class="sidebar-btn-full" onclick="openRobocompGraph()">Robocomp Graph</button>
             </div>
-        </div>
+            <div class="sidebar-all-buttons">
+                <button onclick="loadConfiguration()">Load Configuration</button>
+                <button onclick="saveConfiguration()">Save Configuration</button>
+            </div>
+            <div class="sidebar-header">
+                <button class="sidebar-header-toggle" onclick="toggleSidebarMenu()" aria-expanded="true" aria-controls="compactList">
+                    <span class="arrow" aria-hidden="true">▾</span>
+                    <span>Terminals</span>
+                </button>
+                <button class="sidebar-header-btn" onclick="collapseAllTerminals()" title="Collapse all terminal outputs" aria-label="Hide all terminals">Hide</button>
+                <button class="sidebar-header-btn" onclick="showAllTerminals()" title="Expand all terminal outputs" aria-label="Show all terminals">Show</button>
+                <button class="sidebar-create-btn" onclick="createNewTerminal()" title="Create terminal" aria-label="Create new terminal">+ New</button>
+                <span class="sidebar-badge" id="compactCount" aria-live="polite">0</span>
+            </div>
+            <div class="sidebar-list" id="compactList" role="list" aria-label="Collapsed terminals"></div>
+        </aside>
 
-        <!-- VRAM -->
-        <div class="status-box">
-            <p id="vramText" class="consumption-text">VRAM: 0%</p>
-            <div class="bar">
-                <div class="progress" id="vramUsage" style="background: purple;"></div>
+        <div class="main-content">
+            <!-- Global status -->
+            <div class="status-container" id="globalStatus">
+                <!-- CPU + RAM, stacked in one column -->
+                <div class="gauge-column">
+                    <p class="gauge-column-label">System</p>
+                    <div class="status-box">
+                        <p id="cpuText" class="consumption-text">CPU: 0%</p>
+                        <div class="bar" role="progressbar" aria-label="CPU usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="progress" id="cpuUsage" style="background: #2563eb;"></div>
+                        </div>
+                    </div>
+                    <div class="status-box">
+                        <p id="ramText" class="consumption-text">RAM: 0%</p>
+                        <div class="bar" role="progressbar" aria-label="RAM usage" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="progress" id="ramUsage" style="background: #15803d;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- One column per GPU (load + VRAM stacked), built dynamically -->
+                <div class="gpu-columns" id="gpuColumns" aria-label="GPU usage"></div>
             </div>
+
+            <!-- Terminal grid (expanded terminals only) -->
+            <div class="grid-container" id="terminals"></div>
         </div>
     </div>
 
-    <!-- Terminal grid -->
-    <div class="grid-container" id="terminals"></div>
-
-    <!-- Modal de configuración -->
-    <div id="configModal" class="config-modal">
+    <!-- Configuration modal -->
+    <div id="configModal" class="config-modal" role="dialog" aria-modal="true" aria-labelledby="configModalTitle">
         <div class="config-modal-content">
             <div class="config-modal-header">
-                <h3 class="config-modal-title">Configurar Terminal</h3>
-                <button class="config-modal-close" onclick="closeConfigModal()">×</button>
+                <h3 class="config-modal-title" id="configModalTitle">Configure Terminal</h3>
+                <button class="config-modal-close" onclick="closeConfigModal()" aria-label="Close">×</button>
             </div>
             <div id="configModalBody">
-                <!-- Se rellena dinámicamente -->
+                <!-- Filled in dynamically -->
             </div>
         </div>
     </div>
@@ -402,12 +906,16 @@
         var statuses = {};  // Status of each program
 
         // === PERFORMANCE CONFIGURATION ===
-        var MAX_TERMINAL_LINES = 1000;  // Máximo de líneas visibles por terminal
-        var terminalLineCounts = {};     // Contador de líneas por terminal
+        var MAX_TERMINAL_LINES = 1000;  // Maximum visible lines per terminal
+        var terminalLineCounts = {};     // Line counter per terminal
 
-        // Buffers para agrupar actualizaciones DOM con requestAnimationFrame
+        // Buffers to batch DOM updates using requestAnimationFrame
         var pendingUpdates = {};  // {terminalId: [lines...]}
         var rafScheduled = false;
+
+        // If true, the next terminal received via "newTerminal" is created
+        // directly in the collapsed list (sidebar) instead of the grid.
+        var createInList = false;
 
         function updateStatus(id, color) {
             if (statuses[id]) {
@@ -415,35 +923,66 @@
             }
         }
 
-        function addTerminal(id, name = "Unnamed") {
+        /**
+         * Inserts `box` into `container` at the correct alphabetical
+         * position for `name`, comparing against existing siblings.
+         */
+        function insertSorted(container, box, name) {
+            const lowerName = name.toLowerCase();
+            const children = Array.from(container.children);
+
+            for (const child of children) {
+                if (child === box) continue;
+                const input = child.querySelector(".terminal-name-input");
+                const childName = input ? input.value.toLowerCase() : "";
+                if (lowerName < childName) {
+                    container.insertBefore(box, child);
+                    return;
+                }
+            }
+            container.appendChild(box);
+        }
+
+        function addTerminal(id, name = "Unnamed", buildable = true) {
             let div = document.createElement("div");
             div.className = "terminal-box";
             div.id = "terminal_" + id;
             div.innerHTML += `
-                <button class="close-terminal-btn" onclick="deleteTerminal('${id}')" title="Eliminar terminal">×</button>
-                <div id="name${id}" class="terminal-name">
-                    <input type="text" id="nameInput${id}" value="${name}" onblur="editName('${id}')" class="terminal-name-input" />
+                <div class="terminal-header">
+                    <span class="status-pill">
+                        <span class="status-dot" aria-hidden="true"></span>
+                        <span class="status-text" id="statusText_${id}">Idle</span>
+                    </span>
+                    <div id="name${id}" class="terminal-name">
+                        <input type="text" id="nameInput${id}" value="${name}" onblur="editName('${id}')" class="terminal-name-input" aria-label="Terminal name" />
+                    </div>
+                    <button class="collapse-terminal-btn" onclick="toggleCollapse('${id}')" title="Collapse/expand output" aria-label="Collapse or expand terminal">▾</button>
+                    <button class="close-terminal-btn" onclick="deleteTerminal('${id}')" title="Delete terminal" aria-label="Delete terminal">×</button>
                 </div>
-                <div id="terminalOutput_${id}" class="terminal-output"></div>
-                
+                <div id="terminalOutput_${id}" class="terminal-output" aria-label="Terminal output"></div>
+
                 <div class="button-container">
-                    <button onclick="runCommand('${id}')">Run</button>
-                    <button onclick="stopCommand('${id}')">Stop</button>
-                    <button onclick="cleanCommand('${id}')">Clean</button>
-                    <button onclick="compileCommand('${id}')">Build</button>
-                    <button onclick="openCodium('${id}')">Code</button>
-                    <button onclick="openConfigModal('${id}')">Config</button>
+                    <button class="btn-run" onclick="runCommand('${id}')">Run</button>
+                    <button class="btn-stop" onclick="stopCommand('${id}')">Stop</button>
+                    <button class="btn-clean" onclick="cleanCommand('${id}')" ${buildable ? '' : 'disabled'}>Clean</button>
+                    <button class="btn-build" onclick="compileCommand('${id}')" ${buildable ? '' : 'disabled'}>Build</button>
+                    <button class="btn-code" onclick="openCodium('${id}')">Code</button>
+                    <button class="btn-config" onclick="openConfigModal('${id}')">Config</button>
                     <div class="info-box" id="info_${id}">CPU: 0%<br>RAM: 0%</div>
 
                 </div>
+                <input type="text" id="quickCmd_${id}" class="quick-cmd-input"
+                       placeholder="Command or response to the program…"
+                       aria-label="Quick command"
+                       onkeydown="if(event.key==='Enter'){execQuick('${id}');}" />
             `;
-            document.getElementById("terminals").appendChild(div);
+            insertSorted(document.getElementById("terminals"), div, name);
             terminalLineCounts[id] = 0;
         }
 
         /**
-         * Encola líneas para ser renderizadas en el próximo frame.
-         * Esto agrupa múltiples actualizaciones en una sola operación DOM.
+         * Queues lines to be rendered on the next frame.
+         * This batches multiple updates into a single DOM operation.
          */
         function enqueueTerminalUpdate(id, lines) {
             if (!pendingUpdates[id]) {
@@ -458,8 +997,8 @@
         }
 
         /**
-         * Renderiza todas las actualizaciones pendientes en un solo frame.
-         * Usa DocumentFragment para minimizar reflows.
+         * Renders all pending updates in a single frame.
+         * Uses a DocumentFragment to minimize reflows.
          */
         function flushTerminalUpdates() {
             rafScheduled = false;
@@ -471,23 +1010,23 @@
                 var terminalOutput = document.getElementById("terminalOutput_" + id);
                 if (!terminalOutput) continue;
 
-                // Detectar si el usuario está cerca del fondo ANTES de añadir
+                // Detect whether the user is near the bottom BEFORE appending
                 var isNearBottom = terminalOutput.scrollHeight - terminalOutput.scrollTop <= terminalOutput.clientHeight + 50;
 
-                // Usar DocumentFragment para insertar todas las líneas de golpe (un solo reflow)
+                // Use a DocumentFragment to insert all lines at once (a single reflow)
                 var fragment = document.createDocumentFragment();
                 for (var i = 0; i < lines.length; i++) {
                     var lineDiv = document.createElement("div");
                     lineDiv.className = "terminal-line";
-                    lineDiv.innerHTML = lines[i];  // Ya viene como HTML desde el backend
+                    lineDiv.innerHTML = lines[i];  // Already comes as HTML from the backend
                     fragment.appendChild(lineDiv);
                 }
                 terminalOutput.appendChild(fragment);
 
-                // Actualizar contador de líneas
+                // Update line counter
                 terminalLineCounts[id] = (terminalLineCounts[id] || 0) + lines.length;
 
-                // Eliminar líneas antiguas si excede el máximo
+                // Remove old lines if the maximum is exceeded
                 while (terminalLineCounts[id] > MAX_TERMINAL_LINES) {
                     var firstChild = terminalOutput.firstChild;
                     if (firstChild) {
@@ -498,7 +1037,7 @@
                     }
                 }
 
-                // Auto-scroll solo si el usuario estaba cerca del fondo
+                // Auto-scroll only if the user was near the bottom
                 if (isNearBottom) {
                     terminalOutput.scrollTop = terminalOutput.scrollHeight;
                 }
@@ -506,21 +1045,72 @@
             pendingUpdates = {};
         }
 
-        /** Retrocompatibilidad: actualizar terminal línea por línea */
+        /** Backwards compatibility: update a terminal line by line */
         function updateTerminal(id, text) {
             enqueueTerminalUpdate(id, [text]);
         }
 
-        function updateGeneralUsage(cpu, gpu, ram, vram) {
-            document.getElementById("cpuUsage").style.width = cpu + "%";
-            document.getElementById("gpuUsage").style.width = gpu + "%";
-            document.getElementById("ramUsage").style.width = ram + "%";
-            document.getElementById("vramUsage").style.width = vram + "%";
+        function setBarValue(usageId, value) {
+            const usageEl = document.getElementById(usageId);
+            usageEl.style.width = value + "%";
+            const bar = usageEl.closest(".bar");
+            if (bar) bar.setAttribute("aria-valuenow", value);
+        }
 
+        // Ids of the GPU columns currently rendered in the sidebar, so we only
+        // rebuild the DOM when the detected GPU list actually changes.
+        var renderedGpuIds = [];
+
+        function buildGpuColumns(gpus) {
+            const container = document.getElementById("gpuColumns");
+            container.innerHTML = "";
+            renderedGpuIds = gpus.map(gpu => gpu.id);
+
+            gpus.forEach(gpu => {
+                const column = document.createElement("div");
+                column.className = "gauge-column";
+                column.innerHTML = `
+                    <p class="gauge-column-label" title="${gpu.name}">${gpu.name}</p>
+                    <div class="status-box">
+                        <p id="gpuText_${gpu.id}" class="consumption-text">Load: 0%</p>
+                        <div class="bar" role="progressbar" aria-label="${gpu.name} load" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="progress" id="gpuUsage_${gpu.id}" style="background: #b45309;"></div>
+                        </div>
+                    </div>
+                    ${gpu.has_vram ? `
+                    <div class="status-box">
+                        <p id="vramText_${gpu.id}" class="consumption-text">VRAM: 0%</p>
+                        <div class="bar" role="progressbar" aria-label="${gpu.name} VRAM" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                            <div class="progress" id="vramUsage_${gpu.id}" style="background: #7c3aed;"></div>
+                        </div>
+                    </div>` : ""}
+                `;
+                container.appendChild(column);
+            });
+        }
+
+        function updateGeneralUsage(cpu, ram, gpus) {
+            setBarValue("cpuUsage", cpu);
+            setBarValue("ramUsage", ram);
             document.getElementById("cpuText").innerText = `CPU: ${cpu}%`;
-            document.getElementById("gpuText").innerText = `GPU: ${gpu}%`;
             document.getElementById("ramText").innerText = `RAM: ${ram}%`;
-            document.getElementById("vramText").innerText = `VRAM: ${vram}%`;
+
+            const incomingIds = gpus.map(gpu => gpu.id);
+            const gpuListChanged = incomingIds.length !== renderedGpuIds.length ||
+                incomingIds.some((id, i) => id !== renderedGpuIds[i]);
+            if (gpuListChanged) {
+                buildGpuColumns(gpus);
+            }
+
+            gpus.forEach(gpu => {
+                setBarValue(`gpuUsage_${gpu.id}`, gpu.load);
+                document.getElementById(`gpuText_${gpu.id}`).innerText = `Load: ${gpu.load}%`;
+
+                if (gpu.has_vram) {
+                    setBarValue(`vramUsage_${gpu.id}`, gpu.vram);
+                    document.getElementById(`vramText_${gpu.id}`).innerText = `VRAM: ${gpu.vram}%`;
+                }
+            });
         }
 
         function updateResourceUsage(id, cpu, ram) {
@@ -543,7 +1133,15 @@
         }
 
         function compileAll() {
-            socket.emit("compileAll");
+            const batchSizeInput = document.getElementById("buildBatchSize");
+            const jobsInput = document.getElementById("buildJobs");
+            const batchSize = batchSizeInput ? (parseInt(batchSizeInput.value, 10) || 2) : 2;
+            const jobs = jobsInput ? (parseInt(jobsInput.value, 10) || 4) : 4;
+            socket.emit("compileAll", { batchSize: batchSize, jobs: jobs });
+        }
+
+        function openRobocompGraph() {
+            socket.emit("openRobocompGraph");
         }
 
         function runCommand(id) {
@@ -561,14 +1159,71 @@
         function compileCommand(id) {
             socket.emit("compileCommand", { id: id });
         }
+
+        function toggleCollapse(id) {
+            const box = document.getElementById("terminal_" + id);
+            const collapseBtn = box.querySelector(".collapse-terminal-btn");
+            const isCollapsed = box.classList.toggle("collapsed");
+            const name = document.getElementById("nameInput" + id).value;
+
+            if (isCollapsed) {
+                insertSorted(document.getElementById("compactList"), box, name);
+                collapseBtn.textContent = "▸";
+                collapseBtn.title = "Expand terminal";
+            } else {
+                insertSorted(document.getElementById("terminals"), box, name);
+                collapseBtn.textContent = "▾";
+                collapseBtn.title = "Collapse/expand output";
+            }
+            updateCompactCount();
+        }
+
+        function collapseAllTerminals() {
+            const boxes = Array.from(document.getElementById("terminals").children);
+            boxes.forEach(box => {
+                const id = box.id.replace("terminal_", "");
+                if (!box.classList.contains("collapsed")) {
+                    toggleCollapse(id);
+                }
+            });
+        }
+
+        function showAllTerminals() {
+            const boxes = Array.from(document.getElementById("compactList").children);
+            boxes.forEach(box => {
+                const id = box.id.replace("terminal_", "");
+                if (box.classList.contains("collapsed")) {
+                    toggleCollapse(id);
+                }
+            });
+        }
+
+        function updateCompactCount() {
+            document.getElementById("compactCount").textContent =
+                document.getElementById("compactList").children.length;
+        }
+
+        function toggleSidebarMenu() {
+            const sidebar = document.getElementById("sidebar");
+            const isCollapsed = sidebar.classList.toggle("menu-collapsed");
+            sidebar.querySelector(".sidebar-header-toggle").setAttribute("aria-expanded", String(!isCollapsed));
+        }
+
+        function execQuick(id) {
+            const input = document.getElementById("quickCmd_" + id);
+            const command = input.value;
+            if (!command || command.trim() === "") return;
+            socket.emit("execQuick", { id: id, command: command });
+            input.value = "";
+        }
         function editDirectory(id) {
-            const dir = prompt("Introduce el directorio:");
+            const dir = prompt("Enter the directory:");
             if (dir && dir.trim() !== "") {
                 socket.emit("editDirectory", { id: id, directory: dir });
             }
         }
         function editCommand(id) {
-            const command = prompt("Introduce el comando a ejecutar:");
+            const command = prompt("Enter the command to run:");
             if (command && command.trim() !== "") {
                 socket.emit("editCommand", { id: id, command: command });
             }
@@ -602,26 +1257,31 @@
                 id: id,
                 name: newName
             });
+
+            const box = document.getElementById("terminal_" + id);
+            if (box && box.parentElement) {
+                insertSorted(box.parentElement, box, newName);
+            }
         }
 
-        // Variables para el modal de configuración
+        // Variables for the configuration modal
         var currentConfigTerminalId = null;
 
         function openConfigModal(id) {
             currentConfigTerminalId = id;
 
-            // Obtener la configuración actual del servidor
+            // Fetch the current configuration from the server
             fetch(`/get-terminal-config?id=${id}`)
                 .then(response => response.json())
                 .then(data => {
                     const modalBody = document.getElementById("configModalBody");
                     modalBody.innerHTML = `
                         <div class="config-field">
-                            <label>Directory:</label>
+                            <label for="configDirectory">Directory:</label>
                             <input type="text" id="configDirectory" value="${data.directory || ''}" />
                         </div>
                         <div class="config-field">
-                            <label>Command:</label>
+                            <label for="configCommand">Command:</label>
                             <input type="text" id="configCommand" value="${data.command || ''}" />
                         </div>
                         <div class="config-field config-field-checkbox">
@@ -631,6 +1291,14 @@
                         <div class="config-field config-field-checkbox">
                             <input type="checkbox" id="configBuildable" ${data.buildable !== false ? 'checked' : ''} />
                             <label for="configBuildable">Buildable (Build)</label>
+                        </div>
+                        <div class="config-field config-field-checkbox">
+                            <input type="checkbox" id="configRobocomp" ${data.robocomp ? 'checked' : ''} />
+                            <label for="configRobocomp">RoboComp (include in the topology graph)</label>
+                        </div>
+                        <div class="config-field">
+                            <label for="configDependsOn">Depends on (name:seconds, name2:seconds2):</label>
+                            <input type="text" id="configDependsOn" value="${data.dependsOn || ''}" placeholder="e.g.: B:3, C:1.5" />
                         </div>
                         <div class="config-modal-buttons">
                             <button onclick="closeConfigModal()">Cancel</button>
@@ -650,6 +1318,16 @@
             currentConfigTerminalId = null;
         }
 
+        document.getElementById("configModal").addEventListener("click", function (event) {
+            if (event.target === this) closeConfigModal();
+        });
+
+        document.addEventListener("keydown", function (event) {
+            if (event.key === "Escape" && document.getElementById("configModal").classList.contains("active")) {
+                closeConfigModal();
+            }
+        });
+
         function saveTerminalConfig() {
             if (currentConfigTerminalId === null) return;
 
@@ -657,12 +1335,18 @@
             const command = document.getElementById("configCommand").value;
             const restart = document.getElementById("configRestart").checked;
             const buildable = document.getElementById("configBuildable").checked;
+            const robocomp = document.getElementById("configRobocomp").checked;
+            const dependsOn = document.getElementById("configDependsOn").value;
 
-            // Enviar actualizaciones al servidor
+            // Send updates to the server
             socket.emit("editDirectory", { id: currentConfigTerminalId, directory: directory });
             socket.emit("editCommand", { id: currentConfigTerminalId, command: command });
             socket.emit("editRestart", { id: currentConfigTerminalId, restart: restart });
             socket.emit("editBuildable", { id: currentConfigTerminalId, buildable: buildable });
+            socket.emit("editRobocomp", { id: currentConfigTerminalId, robocomp: robocomp });
+            socket.emit("editDependsOn", { id: currentConfigTerminalId, dependsOn: dependsOn });
+
+            setBuildableUI(currentConfigTerminalId, buildable);
 
             closeConfigModal();
         }
@@ -675,12 +1359,13 @@
         }
         // New terminal creation
         function createNewTerminal() {
+            createInList = true;
             socket.emit("createTerminal");
         }
 
         // Load Configuration
         function loadConfiguration() {
-            const dir = prompt("Introduce el directorio:");
+            const dir = prompt("Enter the directory:");
             if (dir && dir.trim() !== "") {
                 socket.emit("loadConfig", { directory: dir });
             }
@@ -694,71 +1379,91 @@
 
         // Save Configuration
         function saveConfiguration() {
-            const dir = prompt("Introduce el directorio:");
+            const dir = prompt("Enter the directory:");
             if (dir && dir.trim() !== "") {
                 socket.emit("saveConfig", { directory: dir });
             }
         }
 
 
+        function setBuildableUI(id, buildable) {
+            const terminalBox = document.getElementById("terminal_" + id);
+            if (!terminalBox) return;
+            const buildBtn = terminalBox.querySelector(".btn-build");
+            const cleanBtn = terminalBox.querySelector(".btn-clean");
+            if (buildBtn) buildBtn.disabled = !buildable;
+            if (cleanBtn) cleanBtn.disabled = !buildable;
+        }
+
         socket.on("newTerminal", function (data) {
-            addTerminal(data.id, data.name);
+            addTerminal(data.id, data.name, data.buildable !== false);
+            if (createInList) {
+                createInList = false;
+                toggleCollapse(data.id);
+            }
         });
 
-        // Handler para batches de output (nuevo, alto rendimiento)
+        // Handler for output batches (new, high performance)
         socket.on("outputBatch", function (data) {
             enqueueTerminalUpdate(data.id, data.lines);
         });
 
-        // Handler legacy para output individual (retrocompatibilidad)
+        // Legacy handler for individual output (backwards compatibility)
         socket.on("output", function (data) {
             updateTerminal(data.id, data.text);
         });
 
+        var STATUS_LABELS = {
+            running: "Running",
+            error: "Error",
+            warning: "Warning",
+            waiting: "Waiting"
+        };
+
         socket.on("terminalState", function (data) {
-            // CLAVE: Define terminalBox aqu�, usando el ID del dato
             const terminalBox = document.getElementById("terminal_" + data.id);
 
-            // Asegurarse de que el elemento existe antes de manipularlo
             if (!terminalBox) {
                 console.error("Terminal box not found for ID:", data.id);
                 return;
             }
 
-            // El resto de la l�gica permanece igual
-            terminalBox.classList.remove("running");
-            terminalBox.classList.remove("error");
-            terminalBox.classList.remove("warning");
-
+            terminalBox.classList.remove("running", "error", "warning", "waiting");
             terminalBox.classList.add(data.status);
+
+            const statusText = document.getElementById("statusText_" + data.id);
+            if (statusText) {
+                statusText.textContent = STATUS_LABELS[data.status] || data.status;
+            }
         });
 
         socket.on("generalUsage", function (data) {
-            updateGeneralUsage(data.cpu, data.gpu, data.ram, data.vram);
+            updateGeneralUsage(data.cpu, data.ram, data.gpus || []);
         });
 
         socket.on("resourceUsage", function (data) {
             updateResourceUsage(data.id, data.cpu, data.ram);
         });
 
-        // Handler para eliminar terminal del DOM cuando el servidor confirma la eliminación
+        // Handler to remove a terminal from the DOM once the server confirms deletion
         socket.on("terminalDeleted", function (data) {
             var terminalBox = document.getElementById("terminal_" + data.id);
             if (terminalBox) {
-                // Animación de desvanecimiento opcional
+                // Optional fade-out animation
                 terminalBox.style.transition = "opacity 0.3s, transform 0.3s";
                 terminalBox.style.opacity = "0";
                 terminalBox.style.transform = "scale(0.8)";
 
                 setTimeout(function () {
                     terminalBox.remove();
-                    // Limpiar contadores asociados
+                    // Clear associated counters
                     if (terminalLineCounts[data.id] !== undefined) {
                         delete terminalLineCounts[data.id];
                     }
                     if (pendingUpdates[data.id] !== undefined) {
                         delete pendingUpdates[data.id];
                     }
+                    updateCompactCount();
                 }, 300);
             }
         });
