@@ -20,6 +20,7 @@ from utils.addUser import load_users
 from utils.ansiParser import ansi_to_html
 from utils.configLoader import loadConfig, saveConfig, TerminalConfiguration
 from utils.clientCertAuth import ensure_ca, identify_client_cert
+from utils.robocompTopology import build_topology
 import GPUtil
 import secrets
 import ssl
@@ -505,6 +506,23 @@ def get_terminal_config():
             "dependsOn": depends_on_str
         }
     return {"error": "Terminal not found"}, 404
+
+@app.route('/robocomp-graph')
+@login_required
+def robocomp_graph():
+    return render_template("robocompGraph.html")
+
+@app.route('/api/robocomp-topology')
+@login_required
+def robocomp_topology():
+    components = []
+    for config in terminalsConfig.values():
+        if not config.robocomp:
+            continue
+        directory = os.path.expandvars(config.directory)
+        cmd = " ".join(os.path.expandvars(tok) for cmd in config.command for tok in cmd)
+        components.append({"name": config.name, "cwd": directory, "cmd": cmd})
+    return build_topology(components)
 
 
 # Batching interval in seconds (100ms)

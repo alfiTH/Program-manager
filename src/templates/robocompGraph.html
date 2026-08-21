@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Robocomp Graph</title>
+    <style>
+        :root {
+            --color-bg: #f5f6fa;
+            --color-surface: #ffffff;
+            --color-border: #e1e4ea;
+            --color-text: #1f2328;
+            --color-text-muted: #636c76;
+            --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --color-bg: #14151a;
+                --color-surface: #1c1e26;
+                --color-border: #2c2f3a;
+                --color-text: #e7e9ee;
+                --color-text-muted: #9aa1ac;
+            }
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            font-family: var(--font-sans);
+            background: var(--color-bg);
+            color: var(--color-text);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        header {
+            padding: 10px 16px;
+            border-bottom: 1px solid var(--color-border);
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        header h1 {
+            font-size: 15px;
+            margin: 0;
+            font-weight: 600;
+        }
+
+        .legend {
+            display: flex;
+            gap: 14px;
+            font-size: 12px;
+            color: var(--color-text-muted);
+            flex-wrap: wrap;
+        }
+
+        .legend span {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        #graph {
+            flex: 1;
+            min-height: 0;
+        }
+
+        #status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--color-text-muted);
+            font-size: 13px;
+            text-align: center;
+            max-width: 420px;
+            line-height: 1.5;
+        }
+    </style>
+    <script src="https://unpkg.com/vis-network@9.1.9/standalone/umd/vis-network.min.js"
+        onerror="graphLibFailed()"></script>
+</head>
+
+<body>
+    <header>
+        <h1>Robocomp communications graph</h1>
+        <div class="legend">
+            <span><i class="dot" style="background:#2ec5d3"></i>component</span>
+            <span><i class="dot" style="background:#b072e0"></i>IceStorm (pub/sub)</span>
+            <span><i class="dot" style="background:#e0a72e"></i>DDS</span>
+            <span><i class="dot" style="background:#888"></i>external</span>
+        </div>
+    </header>
+    <div id="graph"></div>
+    <div id="status">Loading topology…</div>
+
+    <script>
+        function setStatus(text) {
+            const el = document.getElementById("status");
+            if (el) el.textContent = text;
+        }
+
+        function clearStatus() {
+            const el = document.getElementById("status");
+            if (el) el.remove();
+        }
+
+        function graphLibFailed() {
+            setStatus("Could not load the graph library (vis-network) from the CDN. " +
+                "Check your internet connection and try again.");
+        }
+
+        const ROLE_COLOR = {
+            component: { background: "#10303a", border: "#2ec5d3" },
+            broker: { background: "#2b1d3d", border: "#b072e0" },
+            ddsbroker: { background: "#3a2d10", border: "#e0a72e" },
+            external: { background: "#2a2a2a", border: "#888888" },
+        };
+
+        const EDGE_COLOR = {
+            rpc: "#2ec5d3",
+            pub: "#b072e0",
+            sub: "#b072e0",
+            dds: "#e0a72e",
+        };
+
+        function nodeLabel(n) {
+            if (n.role === "broker") return "IceStorm";
+            if (n.role === "ddsbroker") return `DDS · domain ${n.domain}`;
+            return n.id;
+        }
+
+        function nodeTooltip(n) {
+            const lines = [];
+            if (n.implements && n.implements.length)
+                lines.push("Implements: " + n.implements.map(e => `${e.iface}:${e.port}`).join(", "));
+            if (n.requires && n.requires.length)
+                lines.push("Requires: " + n.requires.map(r => `${r.identity}:${r.port}`).join(", "));
+            if (n.publishes && n.publishes.length)
+                lines.push("Publishes: " + n.publishes.join(", "));
+            if (n.subscribes && n.subscribes.length)
+                lines.push("Subscribes: " + n.subscribes.join(", "));
+            return lines.join("\n") || n.id;
+        }
+
+        function buildNodes(topo) {
+            return topo.nodes.map(n => ({
+                id: n.id,
+                label: nodeLabel(n),
+                title: nodeTooltip(n),
+                shape: "box",
+                color: ROLE_COLOR[n.role] || ROLE_COLOR.component,
+                font: { color: "#e7e9ee" },
+            }));
+        }
+
+        function buildEdges(topo) {
+            return topo.edges.map((e, i) => ({
+                id: "e" + i,
+                from: e.src,
+                to: e.dst,
+                arrows: "to",
+                label: e.topic || (e.iface ? `${e.iface}:${e.port || ""}` : ""),
+                font: { color: "#9aa1ac", size: 10, strokeWidth: 0 },
+                color: { color: EDGE_COLOR[e.kind] || "#666", opacity: 0.8 },
+                smooth: { type: "continuous" },
+            }));
+        }
+
+        async function loadTopology() {
+            let topo;
+            try {
+                const res = await fetch("/api/robocomp-topology");
+                if (!res.ok) throw new Error("HTTP " + res.status);
+                topo = await res.json();
+            } catch (err) {
+                setStatus("Could not fetch the topology: " + err.message);
+                return;
+            }
+
+            if (!topo.nodes || topo.nodes.length === 0) {
+                setStatus("No terminals flagged as \"robocomp\" with a detectable config. " +
+                    "Check the robocomp checkbox on a terminal and make sure its command " +
+                    "references an etc/config or a .toml.");
+                return;
+            }
+
+            clearStatus();
+            const container = document.getElementById("graph");
+            const data = {
+                nodes: new vis.DataSet(buildNodes(topo)),
+                edges: new vis.DataSet(buildEdges(topo)),
+            };
+            const options = {
+                physics: {
+                    enabled: true,
+                    solver: "forceAtlas2Based",
+                    forceAtlas2Based: { gravitationalConstant: -140, centralGravity: 0.008, springLength: 180 },
+                    stabilization: { iterations: 200 },
+                },
+                interaction: { hover: true },
+                nodes: { borderWidth: 2, margin: 8 },
+            };
+            new vis.Network(container, data, options);
+        }
+
+        if (typeof vis !== "undefined") {
+            loadTopology();
+        } else {
+            window.addEventListener("load", () => {
+                if (typeof vis !== "undefined") loadTopology();
+            });
+        }
+    </script>
+</body>
+
+</html>
