@@ -1,92 +1,120 @@
 # Program Manager Web
 
-Program Manager Web is a powerful tool designed to manage and monitor programs remotely via a web interface. It allows users to control multiple terminal processes, monitor system resources in real-time, and integrates with VSCode (Codium) for a seamless development experience.
-
-## Description
-
-This project provides a centralized dashboard to run, stop, clean, and compile various programs. It features a real-time terminal output display with ANSI color support, making it easy to track the status and logs of your applications. Additionally, it offers detailed resource monitoring, including CPU, RAM, GPU, and VRAM usage, ensuring you have full visibility into your system's performance.
+Program Manager Web is a browser-based control panel for running and monitoring multiple long-lived programs (e.g. robotics components, services, build pipelines) on a remote or local machine. It replaces a wall of SSH terminals with one dashboard: start/stop/build/clean each program, watch its live output, and keep an eye on system resources — all from a single HTTPS page.
 
 ## Key Features
 
--   **Web-Based Control Panel**: Manage your programs from any browser.
--   **Real-Time Resource Monitoring**: Visualize CPU, RAM, GPU, and VRAM usage with dynamic progress bars.
--   **Multi-Terminal Management**: Create and control multiple terminal instances independently.
-    -   **Run**: Execute commands.
-    -   **Stop**: Terminate processes (supports SIGINT, SIGTERM, SIGKILL).
-    -   **Clean & Build**: Pre-configured buttons for cleaning and compiling projects (e.g., using `make` and `cmake`).
--   **Live Terminal Output**: Stream process logs in real-time with full ANSI color support.
--   **VSCode (Codium) Integration**: Open a web-based VSCode instance for the project directory directly from the interface.
--   **User Authentication**: Secure access with a login system backed by `users.json`.
--   **Configuration Management**: Save and load terminal configurations (names, directories, commands) to easily restore setups.
+- **Multi-terminal management** — create any number of independent terminal instances, each with its own working directory, command, and live output panel (ANSI colors included).
+- **Run / Stop / Clean / Build per terminal**
+  - **Run**: launches the configured command; supports quick ad-hoc commands typed into the terminal, which are sent to the running process's stdin if it's busy, or launched as a new command if it's idle.
+  - **Stop**: terminates the process tree, escalating from `SIGINT` to `SIGTERM` to `SIGKILL`.
+  - **Clean**: removes the `build` directory.
+  - **Build**: runs `cmake -B build && make -C build -jN`.
+  - Both Clean and Build are disabled (visually and server-side) for terminals marked as not buildable.
+- **Batch-limited "Build All"** — rebuilds every terminal at once, with configurable **batch size** (max builds running concurrently) and **`-j`** (compiler jobs per build), so a full rebuild doesn't saturate RAM/CPU.
+- **Auto-restart** — a terminal can be configured to relaunch its command automatically if the process exits.
+- **Startup dependencies** — a terminal can wait for other terminals to be running (with a configurable delay in seconds) before it starts, useful for ordered startup of interdependent components.
+- **Real-time resource monitoring** — global CPU/RAM usage plus per-terminal CPU/RAM, and GPU load/VRAM for NVIDIA (via `GPUtil`), AMD, and Intel GPUs (via sysfs), rendered as gauges that fill the available width.
+- **VSCodium integration** — open a web-based VSCodium instance scoped to a terminal's working directory directly from the dashboard.
+- **Configuration management** — load and save terminal setups (name, directory, command, restart/buildable flags, dependencies) as JSON files, so a whole session can be restored in one click.
+- **User authentication** — login system backed by `users.json`, with passwords hashed via `utils/addUser.py`.
+- **Collapsible terminals** — hide/show individual terminals or all of them at once to keep the layout manageable when running many programs.
 
 ## Prerequisites
 
-Required Python libraries (listed in `requeriments.txt`):
--   `flask`
--   `flask-socketio`
--   `flask-login`
--   `psutil`
--   `gputil`
+Python dependencies (listed in `requeriments.txt`):
+- `flask`
+- `flask-socketio`
+- `flask-login`
+- `psutil`
+- `gputil`
 
 ## Installation
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/alfiTH/Program-manager.git
-    cd Program-manager-web
-    ```
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/alfiTH/Program-manager.git
+   cd Program-manager
+   ```
 
-2.  **Install Dependencies**:
-    ```bash
-    pip install -r requeriments.txt
-    #Codium download
-    mkdir ~/software 2> /dev/null; cd ~/software && wget https://github.com/VSCodium/vscodium/releases/download/1.109.21026/vscodium-reh-web-linux-x64-1.109.21026.tar.gz && mkdir vscodium-server && tar -xzf vscodium-reh-web-linux-x64-1.109.21026.tar.gz -C vscodium-server && cd -
-    ```
+2. **Install dependencies**:
+   ```bash
+   pip install -r requeriments.txt
+   ```
+
+3. **Install VSCodium server** (used for the in-browser code editor):
+   ```bash
+   mkdir ~/software 2> /dev/null; cd ~/software
+   wget https://github.com/VSCodium/vscodium/releases/download/1.109.21026/vscodium-reh-web-linux-x64-1.109.21026.tar.gz
+   mkdir vscodium-server
+   tar -xzf vscodium-reh-web-linux-x64-1.109.21026.tar.gz -C vscodium-server
+   cd -
+   ```
+   By default the app expects this at `$HOME/software/vscodium-server`; change the `directory` entry in `CONFIG` at the top of `src/ProgramManager.py` if you installed it elsewhere.
 
 ## Configuration
 
-### SSL Certificates
-The application runs over HTTPS. You need to generate SSL certificates in the `certificates` directory.
-1.  Navigate to the `certificates` folder:
-    ```bash
-    cd certificates
-    ```
-2.  Generate `cert.pem` and `key.pem`.
-    ```bash
-    openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
-    ```
-### Users
-Users are managed via the `users.json` file. Ensure this file exists and contains valid user credentials. You can use the `utils/addUser.py` script to add new users securely.
+### SSL certificates
+The application only runs over HTTPS. Generate a certificate/key pair inside `certificates/`:
 ```bash
-python3 src/utils/addUser.py
+cd certificates
+openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
+cd -
 ```
+
+### Users
+Users live in `users.json` with hashed passwords. Add one with:
+```bash
+python3 src/ProgramManager.py --addUser
+```
+
+### Terminal configuration files
+A configuration file (JSON) describes the terminals to load at startup — see `etc/config.json` for examples. Each entry supports:
+```json
+{
+  "name": "my_component",
+  "directory": "$ROBOCOMP/components/my_component",
+  "command": "bin/my_component etc/config",
+  "restart": false,
+  "buildable": true,
+  "robocomp": false,
+  "depends_on": [{ "name": "other_component", "seconds": 3 }]
+}
+```
+Configurations can also be loaded/saved from the running dashboard via **Load Configuration** / **Save Configuration**.
+
 ## Usage
 
-1.  **Start the Server**:
-    Run the main script from the project root:
-    ```bash
-    python3 src/ProgramManager.py --config etc/config.json
-    ```
+1. **Start the server**:
+   ```bash
+   python3 src/ProgramManager.py --config etc/config.json
+   ```
+   Useful flags:
+   | Flag | Default | Description |
+   |---|---|---|
+   | `--config PATH` | — | Terminal configuration file to load at startup |
+   | `--port PORT` | `5000` | Port for the web dashboard |
+   | `--codium-port PORT` | `8000` | Port for the embedded VSCodium server |
+   | `--host HOST` | `localhost` | Bind address (use `0.0.0.0` for remote access) |
+   | `--ssh-security` | off | Enable SSH-based security |
+   | `--debug` | off | Run Flask in debug mode |
+   | `--addUser` | — | Add a new user and exit |
 
-2.  **Access the Application**:
-    Open your web browser and navigate to:
-    
-    ```https://<server_ip>:5000 ``` or ```https://localhost:5000```
+2. **Access the dashboard**:
+   Open `https://<server_ip>:5000` (or `https://localhost:5000`) in your browser. Since certificates are self-signed, you'll need to accept the browser security warning.
 
-    (Note: Since it uses self-signed certificates, you may need to acknowledge a security warning in your browser).
-
-3.  **Login**:
-    Enter your username and password to access the dashboard.
+3. **Log in** with a user created via `--addUser`.
 
 ## Project Structure
 
--   `src/`: Contains the source code of the application.
-    -   `ProgramManager.py`: Main entry point and Flask application.
-    -   `templates/`: HTML templates for the web interface.
-    -   `utils/`: Utility scripts for user management, ANSI parsing, and configuration loading.
--   `certificates/`: Stores SSL certificates for secure HTTPS connection.
--   `users.json`: Stores user credentials.
--   `requeriments.txt`: List of Python dependencies.
+- `src/`
+  - `ProgramManager.py` — Flask/Socket.IO application: terminal lifecycle, resource monitoring, config load/save.
+  - `templates/` — `index.html` (dashboard) and `login.html`.
+  - `utils/` — `addUser.py` (user management), `ansiParser.py` (ANSI-to-HTML), `configLoader.py` (config load/save).
+- `etc/` — Sample terminal configuration files.
+- `certificates/` — SSL certificate/key for HTTPS.
+- `users.json` — Hashed user credentials.
+- `requeriments.txt` — Python dependencies.
 
 ## License
 
@@ -95,5 +123,5 @@ This project is licensed under the **GNU General Public License v3.0**.
 ## Author
 
 **Alejandro Torrejón Harto**
--   Email: atorrejon@unex.es
--   Copyright 2025, The Program Manager Project
+- Email: atorrejon@unex.es
+- Copyright 2025, The Program Manager Project
